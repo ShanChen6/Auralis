@@ -1,4 +1,8 @@
-import { loadStorageConfig, r2Endpoint } from './storage.config.js';
+import {
+  createS3Client,
+  loadStorageConfig,
+  r2Endpoint,
+} from './storage.config.js';
 
 const fullEnv = {
   R2_ACCOUNT_ID: 'acc',
@@ -31,5 +35,20 @@ describe('loadStorageConfig', () => {
 
   it('dựng endpoint R2 theo account ID', () => {
     expect(r2Endpoint('acc')).toBe('https://acc.r2.cloudflarestorage.com');
+  });
+
+  it('cho phép ghi đè endpoint bằng R2_ENDPOINT (emulator local)', async () => {
+    const config = loadStorageConfig({
+      ...fullEnv,
+      R2_ENDPOINT: 'http://localhost:4569',
+    })!;
+    expect(config.endpoint).toBe('http://localhost:4569');
+
+    const custom = createS3Client(config);
+    expect(custom.config.forcePathStyle).toBe(true);
+    expect((await custom.config.endpoint!()).hostname).toBe('localhost');
+
+    const r2 = createS3Client(loadStorageConfig(fullEnv)!);
+    expect(r2.config.forcePathStyle).toBe(false);
   });
 });

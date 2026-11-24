@@ -1,3 +1,5 @@
+import { S3Client } from '@aws-sdk/client-s3';
+
 export const S3_CLIENT = Symbol('S3_CLIENT');
 export const STORAGE_CONFIG = Symbol('STORAGE_CONFIG');
 
@@ -10,6 +12,8 @@ export interface StorageConfig {
   publicUrl: string;
   /** Thời hạn của Presigned URL (giây) */
   presignExpiresIn: number;
+  /** Ghi đè endpoint S3 (VD: emulator local). Mặc định là endpoint R2 theo account. */
+  endpoint?: string;
 }
 
 const REQUIRED_ENV = [
@@ -34,9 +38,23 @@ export function loadStorageConfig(
     bucket: env.R2_BUCKET!,
     publicUrl: env.R2_PUBLIC_URL!.replace(/\/+$/, ''),
     presignExpiresIn: Number(env.R2_PRESIGN_EXPIRES_IN ?? 600),
+    ...(env.R2_ENDPOINT ? { endpoint: env.R2_ENDPOINT } : {}),
   };
 }
 
 export function r2Endpoint(accountId: string): string {
   return `https://${accountId}.r2.cloudflarestorage.com`;
+}
+
+export function createS3Client(config: StorageConfig): S3Client {
+  return new S3Client({
+    region: 'auto',
+    endpoint: config.endpoint ?? r2Endpoint(config.accountId),
+    // Emulator S3 local thường chỉ hỗ trợ path-style URL
+    forcePathStyle: Boolean(config.endpoint),
+    credentials: {
+      accessKeyId: config.accessKeyId,
+      secretAccessKey: config.secretAccessKey,
+    },
+  });
 }

@@ -19,6 +19,7 @@
     "db:down": "docker compose down",
     "db:migrate": "pnpm --filter auralis-api db:migrate",
     "db:seed": "pnpm --filter auralis-api db:seed",
-    "db:studio": "pnpm --filter auralis-api db:studio"
+    "db:studio": "pnpm --filter auralis-api db:studio",
+    "r2:check": "pnpm --filter auralis-api r2:check"
   }
 }

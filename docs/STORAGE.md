@@ -85,4 +85,21 @@ R2_PRESIGN_EXPIRES_IN=600
 
 Khi thiếu biến `R2_*`, API vẫn khởi động bình thường, chỉ các endpoint storage trả `503`.
 
+## Kiểm tra kết nối R2 thật
+
+```bash
+pnpm r2:check
+```
+
+Script dùng chính `StorageService` và tự xóa file test sau khi chạy xong. Các mục được kiểm tra:
+
+- Presigned PUT với đúng header
+- Đọc lại object qua S3 API
+- Link CDN công khai (`R2_PUBLIC_URL`)
+- R2 **chặn** PUT sai Content-Type, sai dung lượng và chữ ký giả
+- CORS preflight từ `http://localhost:3000`
+- `uploadBuffer` và `deleteObject`
+
+`R2_ENDPOINT` (tùy chọn) ghi đè endpoint, dùng khi chạy với emulator S3 local. Lưu ý: emulator không kiểm tra chữ ký hay CORS như R2 thật.
+
 > ⚠️ Endpoint presigned-upload **chưa có xác thực**. Cần gắn AuthGuard khi làm đăng nhập (Giai đoạn 4).
