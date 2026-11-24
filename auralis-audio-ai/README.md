@@ -33,10 +33,12 @@ Cách tách kịch bản (Markdown được làm sạch trước):
 ```python
 from app.tts.synthesizer import build_default_synthesizer
 
-result = await build_default_synthesizer().synthesize(script, engine="voicestudio", voice="male_deep")
-result.audio            # pydub.AudioSegment – giọng thô, 24kHz mono
-result.paragraphs       # [ParagraphTiming(index, text, start_ms, end_ms), ...]
-result.engine           # engine thực sự đã dùng ("edge" nếu đã fallback)
+result = await build_default_synthesizer().synthesize(
+    script, engine="voicestudio", voice="male_deep"
+)
+result.audio  # pydub.AudioSegment – giọng thô, 24kHz mono
+result.paragraphs  # [ParagraphTiming(index, text, start_ms, end_ms), ...]
+result.engine  # engine thực sự đã dùng ("edge" nếu đã fallback)
 result.fallback_reason
 ```
 
@@ -45,6 +47,41 @@ Thử nhanh từ dòng lệnh:
 ```bash
 uv run python -m app.tts.cli kich-ban.md -o voice.mp3 --engine edge --voice female_warm
 ```
+
+## Hậu kỳ Radio (`app/radio/`)
+
+`RadioProducer` nhận kịch bản, gọi TTS, rồi trộn với nhạc nền:
+
+```
+|<- Intro 3s ->|<------------ giọng MC ------------>|<- Outro 4s ->|
+nhạc  -6dB      ↘ -18dB (auto-ducking)               ↗ -6dB  ↘ fade out
+```
+
+- **Auto-ducking:** phát hiện giọng theo từng khung 10ms. Nhạc hạ xuống sớm 300ms trước khi MC cất lời. Các khoảng lặng ngắn hơn 1,5s (giữa câu, giữa đoạn) vẫn giữ nhạc nhỏ để không bị "nhấp nhô". Khoảng lặng dài hơn thì nhạc dâng lên rồi hạ lại.
+- **Mức âm lượng:**
+  - Giọng được chuẩn hóa về -16 dBFS RMS.
+  - Nhạc được chuẩn hóa cùng mức đó, nên -6dB và -18dB là mức **so với giọng đọc**.
+  - Đỉnh của file được giới hạn ở -1 dBFS.
+- **Nhạc nền:** nhạc ngắn hơn số Radio sẽ được lặp lại, nối có crossfade 2s. Nhạc fade in 600ms ở đầu.
+- **Đầu ra:** MP3 44.1kHz stereo, kèm `timestamps` (giây) của từng đoạn văn, **đã cộng 3s intro**:
+
+```json
+[{ "index": 0, "start": 3.0, "end": 3.92 }, { "index": 1, "start": 4.92, "end": 13.582 }]
+```
+
+```bash
+uv run python -m app.radio.cli kich-ban.md -o radio.mp3 --music piano_rain --voice female_warm
+```
+
+### Nhạc nền (`assets/music/`)
+
+| id | Tên |
+| --- | --- |
+| `piano_rain` | Piano mưa |
+| `lofi_warm` | Lo-fi ấm áp |
+| `acoustic_night` | Guitar mộc |
+
+⚠️ Đây là **nhạc tự tổng hợp để test** (`scripts/generate_placeholder_music.py`). Khi có nhạc thật (không lời, có bản quyền), chỉ cần chép đè file cùng tên. Nên dùng bản dài từ 1 phút trở lên.
 
 ## Cấu hình (`.env`)
 

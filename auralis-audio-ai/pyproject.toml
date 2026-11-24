@@ -12,6 +12,7 @@ dependencies = [
     "edge-tts>=7.3.1",
     "pydub>=0.25.1",
     "httpx>=0.28.1",
+    "numpy>=2.4.6",
 ]
 
 [dependency-groups]

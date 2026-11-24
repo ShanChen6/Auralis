@@ -53,7 +53,7 @@ Yêu cầu kỹ thuật:
 - [x] **Task 2.1: Xây dựng Lõi Tạo Giọng Đọc Đa Chế Độ (Strategy Pattern)**
   - **Chế độ Nhanh (`engine="edge"`):** Tích hợp `edge-tts` (`vi-VN-HoaiMyNeural`, `vi-VN-NamMinhNeural`), tự động tách câu theo dấu chấm/phẩy/xuống dòng để chèn khoảng lặng tự nhiên (`600ms`) và điều chỉnh nhịp đọc trầm ấm (`rate="-5%"`).
   - **Chế độ Studio (`engine="voicestudio"`):** Viết adapter gọi Local API của **VoiceStudio** (`localhost:3900` hoặc qua Cloudflare Tunnel) để xuất giọng đọc nhân bản cảm xúc cao cho các số Radio đặc biệt.
-- [ ] **Task 2.2: Lõi Hậu Kỳ Âm Thanh Chuẩn Radio (`pydub` + `FFmpeg`)**
+- [x] **Task 2.2: Lõi Hậu Kỳ Âm Thanh Chuẩn Radio (`pydub` + `FFmpeg`)**
   - Tạo kho nhạc nền mẫu (`piano_rain.mp3`, `lofi_warm.mp3`, `acoustic_night.mp3`).
   - Lập trình hiệu ứng **Auto-ducking**: 3 giây Intro nhạc dạo đầu lớn (`-6dB`), tự động hạ nhỏ nhạc nền (`-18dB`) khi giọng đọc MC cất lên, và tăng nhạc kèm `fade_out` ở 4 giây Outro cuối bài.
   - Xuất kèm dữ liệu mốc thời gian từng đoạn văn (`timestamps`) để Frontend đồng bộ chữ.
