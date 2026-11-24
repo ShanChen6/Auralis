@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: auralis-api (NestJS)
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter auralis-api lint
+      - run: pnpm --filter auralis-api test
+        env:
+          REDIS_TEST_URL: redis://localhost:6379
+      - run: pnpm --filter auralis-api test:e2e
+      - run: pnpm --filter auralis-api build
+
+  web:
+    name: auralis-web (Next.js)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter auralis-web lint
+      - run: pnpm --filter auralis-web test
+      # API không chạy trong CI: trang build với trạng thái trống rồi tự làm mới khi deploy
+      - run: pnpm --filter auralis-web build
+
+  audio-ai:
+    name: auralis-audio-ai (FastAPI)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: auralis-audio-ai
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pytest
+
+  docker:
+    name: Docker images
+    runs-on: ubuntu-latest
+    needs: [api, audio-ai]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: auralis-api
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: auralis-api/Dockerfile
+          push: false
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+      - name: auralis-audio-ai
+        uses: docker/build-push-action@v6
+        with:
+          context: auralis-audio-ai
+          push: false
+          cache-from: type=gha,scope=audio-ai
+          cache-to: type=gha,mode=max,scope=audio-ai

@@ -1,0 +1,54 @@
+# Render Blueprint cho auralis-api (Dashboard → New → Blueprint → chọn repo).
+# Các biến có sync: false sẽ được hỏi khi tạo; giá trị bí mật không lưu trong repo.
+services:
+  - type: web
+    name: auralis-api
+    runtime: docker
+    dockerfilePath: ./auralis-api/Dockerfile
+    dockerContext: .
+    plan: starter
+    region: singapore
+    healthCheckPath: /api/health
+    autoDeploy: true
+    branch: main
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4000"
+      - key: TRUST_PROXY
+        value: "2"
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: REDIS_KEY_PREFIX
+        value: "auralis:prod:"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: WEB_ORIGIN
+        sync: false
+      - key: WEB_URL
+        sync: false
+      - key: REVALIDATE_SECRET
+        sync: false
+      - key: API_PUBLIC_URL
+        sync: false
+      - key: AUDIO_AI_URL
+        sync: false
+      - key: AUDIO_AI_API_KEY
+        sync: false
+      - key: STORAGE_LOCAL_FALLBACK
+        value: "false"
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: R2_PUBLIC_URL
+        sync: false

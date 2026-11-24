@@ -49,6 +49,13 @@ pnpm db:seed                                # dữ liệu mẫu (chuyên mục, 
 
 Kiểm thử: `pnpm build`, `pnpm lint`, `pnpm test`, `cd auralis-audio-ai && uv run pytest`.
 
+## Docker
+
+```bash
+# Toàn bộ backend (PostgreSQL, Redis, API, audio-ai) – cần JWT_SECRET và AUDIO_AI_API_KEY trong .env
+docker compose -f docker-compose.full.yml up -d --build
+```
+
 ## Quy trình nhánh
 
 - `main` — nhánh ổn định, chỉ nhận merge từ `develop`.
@@ -60,3 +67,4 @@ Kiểm thử: `pnpm build`, `pnpm lint`, `pnpm test`, `cd auralis-audio-ai && uv
 - [Thiết kế cơ sở dữ liệu](docs/DATABASE.md)
 - [Lưu trữ Cloudflare R2](docs/STORAGE.md)
 - [API & sự kiện Socket.io](docs/API.md)
+- [Triển khai Production](docs/DEPLOYMENT.md)

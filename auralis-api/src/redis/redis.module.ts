@@ -19,6 +19,8 @@ export function createRedis(
 ): Redis | null {
   if (env.DISABLE_REDIS === 'true') return null;
   const redis = new Redis(env.REDIS_URL ?? 'redis://localhost:6379', {
+    // Tách key giữa các môi trường dùng chung một Redis (VD: staging và production trên Upstash)
+    keyPrefix: env.REDIS_KEY_PREFIX ?? 'auralis:',
     lazyConnect: false,
     maxRetriesPerRequest: 1,
     enableOfflineQueue: false,

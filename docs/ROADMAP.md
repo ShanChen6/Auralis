@@ -149,7 +149,7 @@ Yêu cầu kỹ thuật:
   - Cài đặt `@nestjs/throttler` kết hợp Redis để áp dụng **Rate Limiting**: Giới hạn mỗi tài khoản người dùng chỉ được tạo tối đa `3 số Radio AI/ngày` và giới hạn độ dài kịch bản (VD: tối đa 3.000 từ/bài) để chống spam làm quá tải dịch vụ Python FastAPI.
   - Kiểm tra định dạng MIME type và giới hạn dung lượng file tải lên Cloudflare R2 (tối đa 5MB cho ảnh bìa, 50MB cho file MP3).
 
-- [ ] **Task 5.3: Đóng gói Docker & Triển khai Hạ tầng (Deployment)**
+- [x] **Task 5.3: Đóng gói Docker & Triển khai Hạ tầng (Deployment)**
   - Viết `Dockerfile` đa tầng (Multi-stage build) gọn nhẹ cho dịch vụ **Python FastAPI** (tích hợp sẵn `ffmpeg` và các file nhạc nền mẫu bên trong container) để triển khai miễn phí lên **Hugging Face Spaces** (gói CPU 16GB RAM) hoặc **Render**.
   - Triển khai **PostgreSQL** lên **Supabase** hoặc **Neon** (kích hoạt Connection Pooling qua PgBouncer để chịu tải kết nối đồng thời lớn).
   - Triển khai **Backend NestJS** lên **Render / Railway** (bật hỗ trợ WebSockets cho Socket.io) và **Frontend Next.js** lên **Vercel**.
