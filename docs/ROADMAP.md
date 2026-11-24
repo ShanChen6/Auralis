@@ -24,7 +24,7 @@
 ### GIAI ĐOẠN 1: Kiến trúc Database Chịu tải lớn & Lưu trữ Cloudflare R2 (Tuần 1 – Tuần 2)
 *Mục tiêu: Xây dựng hạ tầng lưu trữ hàng trăm nghìn bài blog không giật lag và kết nối Cloudflare R2 để lưu ảnh bìa/file MP3 miễn phí băng thông.*
 
-- [ ] **Task 1.1: Khởi tạo Monorepo / 3 Phân hệ**
+- [x] **Task 1.1: Khởi tạo Monorepo / 3 Phân hệ**
   - Khởi tạo `auralis-web` (Next.js), `auralis-api` (NestJS), và `auralis-audio-ai` (Python FastAPI).
   - Cấu hình Docker Compose chạy PostgreSQL và Redis local.
 - [ ] **Task 1.2: Thiết kế Database Tách lớp (`schema.prisma`)**

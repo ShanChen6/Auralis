@@ -16,6 +16,25 @@ giao diện kể chuyện tương tác chiều sâu không gian (Spatial UI) và
 | `auralis-audio-ai` | Python FastAPI, edge-tts, VoiceStudio Local API, pydub + FFmpeg |
 | Lưu trữ | PostgreSQL + Cloudflare R2 |
 
+## Chạy local
+
+Yêu cầu: Node.js ≥ 22, pnpm 10, [uv](https://docs.astral.sh/uv/) (Python 3.11), Docker.
+
+```bash
+cp .env.example .env
+pnpm install
+pnpm db:up                                  # PostgreSQL :5432 + Redis :6379
+(cd auralis-audio-ai && uv sync)
+```
+
+| Lệnh | Dịch vụ | Địa chỉ |
+| --- | --- | --- |
+| `pnpm dev:web` | Next.js | http://localhost:3000 |
+| `pnpm dev:api` | NestJS | http://localhost:4000/api/health |
+| `pnpm dev:audio` | FastAPI | http://localhost:8000/api/v1/health |
+
+Kiểm thử: `pnpm build`, `pnpm lint`, `pnpm test`, `cd auralis-audio-ai && uv run pytest`.
+
 ## Quy trình nhánh
 
 - `main` — nhánh ổn định, chỉ nhận merge từ `develop`.

@@ -1,0 +1,21 @@
+{
+  "name": "auralis",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Auralis – Trạm Thanh Âm & Cảm Xúc",
+  "author": "Shan Dev",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev:web": "pnpm --filter auralis-web dev",
+    "dev:api": "pnpm --filter auralis-api start:dev",
+    "dev:audio": "cd auralis-audio-ai && uv run uvicorn app.main:app --reload --port 8000",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "test": "pnpm --filter auralis-api test",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down"
+  }
+}
