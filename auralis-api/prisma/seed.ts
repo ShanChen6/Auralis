@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { readFileSync } from 'node:fs';
 import { PrismaPg } from '@prisma/adapter-pg';
 import {
   AudioSource,
@@ -8,6 +9,40 @@ import {
   PrismaClient,
   UserRole,
 } from '../src/generated/prisma/client.js';
+
+/**
+ * Dữ liệu mẫu cho môi trường phát triển.
+ * - seed-data/demo-posts.json: nội dung 5 số Radio
+ * - seed-data/demo-audio.json: duration + timestamps, sinh bởi
+ *   `uv run python -m scripts.generate_demo_radios` (auralis-audio-ai).
+ *   File MP3 nằm ở auralis-web/public/demo/radio/<slug>.mp3.
+ */
+
+interface DemoPost {
+  slug: string;
+  title: string;
+  summary: string;
+  moodTag: keyof typeof MoodTag;
+  category: string;
+  voice: 'female_warm' | 'male_deep';
+  music: string;
+  content: string;
+}
+
+interface DemoAudio {
+  duration: number;
+  timestamps: { index: number; start: number; end: number }[];
+}
+
+const readJson = <T>(name: string): T =>
+  JSON.parse(
+    readFileSync(new URL(`./seed-data/${name}`, import.meta.url), 'utf8'),
+  ) as T;
+
+const VOICE_NAMES: Record<DemoPost['voice'], string> = {
+  female_warm: 'vi-VN-HoaiMyNeural',
+  male_deep: 'vi-VN-NamMinhNeural',
+};
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }),
@@ -21,57 +56,10 @@ const categories = [
   { name: 'Radio đêm', slug: 'radio-dem', sortOrder: 5 },
 ];
 
-const posts = [
-  {
-    title: 'Trạm đêm mưa',
-    slug: 'tram-dem-mua',
-    summary:
-      'Những giọt mưa gõ nhịp trên mái tôn, và một người ngồi nghe lòng mình lặng lại.',
-    moodTag: MoodTag.CALM,
-    category: 'radio-dem',
-    voiceName: 'vi-VN-HoaiMyNeural',
-    backgroundMusic: 'piano_rain',
-  },
-  {
-    title: 'Gửi người đã từng thương',
-    slug: 'gui-nguoi-da-tung-thuong',
-    summary:
-      'Có những lá thư không cần gửi đi, chỉ cần viết xong là lòng nhẹ bớt.',
-    moodTag: MoodTag.NOSTALGIC,
-    category: 'thu-gui',
-    voiceName: 'vi-VN-NamMinhNeural',
-    backgroundMusic: 'acoustic_night',
-  },
-  {
-    title: 'Ổn thôi, rồi sẽ ổn',
-    slug: 'on-thoi-roi-se-on',
-    summary: 'Một lời nhắc nhỏ cho những ngày mọi thứ dường như quá sức.',
-    moodTag: MoodTag.HEALING,
-    category: 'chua-lanh',
-    voiceName: 'vi-VN-HoaiMyNeural',
-    backgroundMusic: 'lofi_warm',
-  },
-  {
-    title: 'Mùa hoa sữa cuối phố',
-    slug: 'mua-hoa-sua-cuoi-pho',
-    summary: 'Hà Nội tháng mười, mùi hoa sữa và một con phố cũ đầy kỷ niệm.',
-    moodTag: MoodTag.ROMANTIC,
-    category: 'tan-van',
-    voiceName: 'vi-VN-NamMinhNeural',
-    backgroundMusic: 'piano_rain',
-  },
-  {
-    title: 'Chuyến tàu sớm',
-    slug: 'chuyen-tau-som',
-    summary: 'Câu chuyện về một chuyến đi bắt đầu từ lúc trời còn chưa sáng.',
-    moodTag: MoodTag.HOPEFUL,
-    category: 'truyen-ngan',
-    voiceName: 'vi-VN-HoaiMyNeural',
-    backgroundMusic: 'acoustic_night',
-  },
-];
-
 async function main(): Promise<void> {
+  const posts = readJson<DemoPost[]>('demo-posts.json');
+  const audio = readJson<Record<string, DemoAudio>>('demo-audio.json');
+
   for (const category of categories) {
     await prisma.category.upsert({
       where: { slug: category.slug },
@@ -94,31 +82,40 @@ async function main(): Promise<void> {
 
   const now = Date.now();
   for (const [index, post] of posts.entries()) {
-    const { category: categorySlug, ...data } = post;
-    const paragraphs = [
-      data.summary,
-      'Đây là nội dung mẫu cho môi trường phát triển. Mỗi đoạn văn tương ứng với một mốc thời gian để trình phát bôi sáng khi đọc.',
-      'Hãy thay nội dung này bằng tản văn thật khi Creator Studio hoàn thiện.',
-    ];
+    const track = audio[post.slug];
+    const content = {
+      content: post.content,
+      timestamps: track?.timestamps,
+      wordCount: post.content.split(/\s+/).filter(Boolean).length,
+    };
+    const data = {
+      title: post.title,
+      summary: post.summary,
+      moodTag: MoodTag[post.moodTag],
+      status: PostStatus.PUBLISHED,
+      audioUrl: track ? `/demo/radio/${post.slug}.mp3` : null,
+      duration: track ? Math.round(track.duration) : null,
+      audioSource: track ? AudioSource.AI_EDGE : AudioSource.NONE,
+      audioStatus: track ? AudioStatus.READY : AudioStatus.TEXT_ONLY,
+      voiceName: VOICE_NAMES[post.voice],
+      backgroundMusic: post.music,
+      isFeatured: true,
+      publishedAt: new Date(now - index * 86_400_000),
+      listenCount: 500 - index * 73,
+      category: { connect: { slug: post.category } },
+    };
 
     await prisma.post.upsert({
-      where: { slug: data.slug },
-      update: {},
+      where: { slug: post.slug },
+      update: {
+        ...data,
+        content: { upsert: { create: content, update: content } },
+      },
       create: {
         ...data,
-        status: PostStatus.PUBLISHED,
-        audioSource: AudioSource.NONE,
-        audioStatus: AudioStatus.TEXT_ONLY,
-        isFeatured: true,
-        publishedAt: new Date(now - index * 86_400_000),
+        slug: post.slug,
         author: { connect: { id: author.id } },
-        category: { connect: { slug: categorySlug } },
-        content: {
-          create: {
-            content: paragraphs.join('\n\n'),
-            wordCount: paragraphs.join(' ').split(/\s+/).length,
-          },
-        },
+        content: { create: content },
       },
     });
   }
