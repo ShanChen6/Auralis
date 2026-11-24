@@ -32,7 +32,7 @@ pnpm db:seed                                # dữ liệu mẫu (chuyên mục, 
 
 | Lệnh | Dịch vụ | Địa chỉ |
 | --- | --- | --- |
-| `pnpm dev:web` | Next.js | http://localhost:3000 |
+| `pnpm dev:web` | Next.js | http://localhost:3000 (cần API chạy để có dữ liệu) |
 | `pnpm dev:api` | NestJS | http://localhost:4000/api/health |
 | `pnpm dev:audio` | FastAPI | http://localhost:8000/api/v1/health |
 

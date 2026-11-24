@@ -78,14 +78,14 @@ Yêu cầu kỹ thuật:
 ### GIAI ĐOẠN 3: Giao diện Hiện đại 2026 — Spatial Carousel & Interactive Storytelling (Tuần 5 – Tuần 7)
 *Mục tiêu: Thiết kế giao diện Calm UI dịu mắt, băng chuyền số Radio chiều sâu không gian và trải nghiệm đọc – nghe tương tác đồng bộ.*
 
-- [ ] **Task 3.1: Thiết lập Design System & Bảng màu Auralis**
+- [x] **Task 3.1: Thiết lập Design System & Bảng màu Auralis**
   - Cấu hình TailwindCSS với bảng màu Midnight Indigo (`#0B0F19`), Deep Slate (`#131A2A`), Warm Amber (`#F59E0B`), Soft Lavender (`#A78BFA`) và cặp font chữ tiếng Việt (`Be Vietnam Pro` + `Lora`).
-- [ ] **Task 3.2: Trang chủ Spatial Radio Carousel (Băng chuyền Chiều sâu Không gian)**
+- [x] **Task 3.2: Trang chủ Spatial Radio Carousel (Băng chuyền Chiều sâu Không gian)**
   - Sử dụng **Framer Motion** dựng băng chuyền 5 số Radio nổi bật: thẻ ở giữa sắc nét, phóng to nhẹ và tỏa ánh sáng hổ phách; các thẻ hai bên làm mờ dần (`blur`) tạo chiều sâu thị giác.
   - Xây dựng bảng chi tiết kính mờ (Liquid Glass) bên phải **"Trong số Radio này"**: tự động cập nhật mượt mà tên tác giả, giọng đọc AI/CTV, nhạc nền, trích đoạn và nút *"Phát trọn số này"* khi chuyển đổi thẻ ở trung tâm.
-- [ ] **Task 3.3: Trình phát Âm thanh Xuyên suốt (Persistent Mini-Player)**
+- [x] **Task 3.3: Trình phát Âm thanh Xuyên suốt (Persistent Mini-Player)**
   - Dùng **Zustand** quản lý trạng thái trình phát cố định ở cạnh dưới màn hình (Play/Pause, tua thời gian, danh sách chờ Queue, và **Hẹn giờ tắt Sleep Timer: 15p, 30p, 60p**), đảm bảo âm thanh không bị ngắt khi chuyển trang.
-- [ ] **Task 3.4: Trang Chi tiết Interactive Storytelling (Đọc & Nghe Đồng bộ)**
+- [x] **Task 3.4: Trang Chi tiết Interactive Storytelling (Đọc & Nghe Đồng bộ)**
   - Đồng bộ tiến độ file audio với dữ liệu `timestamps`: tự động cuộn mượt và bôi sáng ấm đoạn văn bản MC đang đọc, làm mờ nhẹ các đoạn xung quanh.
   - Tích hợp **Bộ trộn Âm thanh Môi trường (Soundscape Mixer)** bằng Web Audio API cho phép người nghe bật thêm tiếng mưa rơi, lửa trại hoặc sóng biển chạy song song với số Radio.
 
