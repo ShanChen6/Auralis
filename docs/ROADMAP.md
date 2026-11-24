@@ -31,7 +31,7 @@
   - Tách riêng bảng `Posts` (chỉ chứa metadata nhẹ: `id`, `title`, `slug`, `summary`, `coverUrl`, `audioUrl`, `duration`, `moodTag`, `status`, `createdAt`) và bảng `PostContents` (chứa cột `content` văn bản dài và `timestampsJson` phục vụ chạy chữ Karaoke).
   - Thiết kế các bảng phụ trợ: `Users` (Thính giả, Tác giả, Admin), `Categories`, `Playlists`, `Comments`, và `LiveRooms`.
   - Tạo Index tối ưu cho tìm kiếm toàn văn (Full-Text Search) và lọc nhanh theo tâm trạng/chuyên mục.
-- [ ] **Task 1.3: Tích hợp Cloudflare R2 Storage Service**
+- [x] **Task 1.3: Tích hợp Cloudflare R2 Storage Service**
   - Viết module lưu trữ trong NestJS dùng `@aws-sdk/client-s3` kết nối Cloudflare R2.
   - Xây dựng API cấp Presigned URL để tải ảnh bìa và file âm thanh trực tiếp lên CDN mà không làm nghẽn băng thông server.
 

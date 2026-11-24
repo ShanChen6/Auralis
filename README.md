@@ -47,3 +47,4 @@ Kiểm thử: `pnpm build`, `pnpm lint`, `pnpm test`, `cd auralis-audio-ai && uv
 
 - [Lộ trình triển khai](docs/ROADMAP.md)
 - [Thiết kế cơ sở dữ liệu](docs/DATABASE.md)
+- [Lưu trữ Cloudflare R2](docs/STORAGE.md)

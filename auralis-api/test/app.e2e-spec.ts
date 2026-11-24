@@ -22,7 +22,10 @@ describe('AppController (e2e)', () => {
       .get('/api/health')
       .expect(200)
       .expect((res) => {
-        expect(res.body).toMatchObject({ service: 'auralis-api', status: 'ok' });
+        expect(res.body).toMatchObject({
+          service: 'auralis-api',
+          status: 'ok',
+        });
       });
   });
 
