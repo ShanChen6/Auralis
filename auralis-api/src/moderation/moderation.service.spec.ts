@@ -1,5 +1,6 @@
 import { ConflictException } from '@nestjs/common';
 import type { PrismaService } from '../prisma/prisma.service.js';
+import type { ContentEvents } from '../security/web-revalidator.service.js';
 import { ModerationService } from './moderation.service.js';
 
 function setup() {
@@ -7,28 +8,37 @@ function setup() {
     post: { update: vi.fn() },
     narrationClaim: {
       updateMany: vi.fn(),
-      update: vi.fn().mockResolvedValue({ id: 'n1' }),
+      update: vi
+        .fn()
+        .mockResolvedValue({ id: 'n1', post: { slug: 'cho-giong-doc' } }),
     },
   };
   const prisma = {
     post: {
       findUnique: vi.fn(),
-      update: vi.fn().mockResolvedValue({}),
+      update: vi
+        .fn()
+        .mockResolvedValue({ slug: 'bai-viet', status: 'PUBLISHED' }),
       count: vi.fn(),
     },
     narrationClaim: { findUnique: vi.fn(), update: vi.fn(), count: vi.fn() },
     $transaction: vi.fn((fn: (t: typeof tx) => unknown) => fn(tx)),
   };
+  const events = { postsChanged: vi.fn().mockResolvedValue(undefined) };
   return {
     prisma,
     tx,
-    service: new ModerationService(prisma as unknown as PrismaService),
+    events,
+    service: new ModerationService(
+      prisma as unknown as PrismaService,
+      events as unknown as ContentEvents,
+    ),
   };
 }
 
 describe('ModerationService – bài viết', () => {
-  it('duyệt: PENDING → PUBLISHED, ghi người duyệt, sửa tâm trạng', async () => {
-    const { prisma, service } = setup();
+  it('duyệt: PENDING → PUBLISHED, ghi người duyệt, sửa tâm trạng, làm mới cache/trang', async () => {
+    const { prisma, events, service } = setup();
     prisma.post.findUnique.mockResolvedValue({
       id: 'p1',
       status: 'PENDING',
@@ -47,6 +57,7 @@ describe('ModerationService – bài viết', () => {
       reviewer: { connect: { id: 'editor' } },
     });
     expect(data.publishedAt).toBeInstanceOf(Date);
+    expect(events.postsChanged).toHaveBeenCalledWith(['bai-viet']);
   });
 
   it('không duyệt bài không ở trạng thái chờ hoặc đang tạo Radio', async () => {
@@ -69,8 +80,8 @@ describe('ModerationService – bài viết', () => {
     );
   });
 
-  it('từ chối kèm lý do', async () => {
-    const { prisma, service } = setup();
+  it('từ chối kèm lý do (không cần làm mới trang công khai)', async () => {
+    const { prisma, events, service } = setup();
     prisma.post.findUnique.mockResolvedValue({
       id: 'p1',
       status: 'PENDING',
@@ -83,6 +94,7 @@ describe('ModerationService – bài viết', () => {
       status: 'REJECTED',
       rejectReason: 'Nội dung chưa phù hợp',
     });
+    expect(events.postsChanged).not.toHaveBeenCalled();
   });
 });
 

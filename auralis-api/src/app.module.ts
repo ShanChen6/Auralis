@@ -7,6 +7,8 @@ import { ModerationModule } from './moderation/moderation.module.js';
 import { NarrationsModule } from './narrations/narrations.module.js';
 import { PostsModule } from './posts/posts.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { RedisModule } from './redis/redis.module.js';
+import { SecurityModule } from './security/security.module.js';
 import { RadioQueueModule } from './radio-queue/radio-queue.module.js';
 import { StorageModule } from './storage/storage.module.js';
 import { StudioModule } from './studio/studio.module.js';
@@ -14,7 +16,9 @@ import { StudioModule } from './studio/studio.module.js';
 @Module({
   imports: [
     PrismaModule,
+    RedisModule,
     AuthModule,
+    SecurityModule,
     StorageModule,
     RadioQueueModule,
     PostsModule,

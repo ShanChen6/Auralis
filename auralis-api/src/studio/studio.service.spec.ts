@@ -5,6 +5,7 @@ import {
 import type { PrismaService } from '../prisma/prisma.service.js';
 import type { RadioQueueService } from '../radio-queue/radio-queue.service.js';
 import type { StorageService } from '../storage/storage.service.js';
+import type { AiQuotaService } from '../security/ai-quota.service.js';
 import { StudioService } from './studio.service.js';
 
 const content = 'Đoạn một ngắn.\n\nĐoạn hai dài hơn đoạn một rất nhiều chữ.';
@@ -25,12 +26,18 @@ function setup({ owns = true, slugTaken = false } = {}) {
   };
   const storage = { ownsUrl: vi.fn().mockReturnValue(owns) };
   const queue = { enqueue: vi.fn().mockResolvedValue(undefined) };
+  const quota = {
+    consume: vi.fn().mockResolvedValue({}),
+    refund: vi.fn(),
+    status: vi.fn(),
+  };
   const service = new StudioService(
     prisma as unknown as PrismaService,
     storage as unknown as StorageService,
     queue as unknown as RadioQueueService,
+    quota as unknown as AiQuotaService,
   );
-  return { prisma, storage, queue, service };
+  return { prisma, storage, queue, quota, service };
 }
 
 const base = { title: 'Trạm đêm mưa', moodTag: 'CALM' as const, content };
@@ -162,5 +169,42 @@ describe('StudioService.retryAudio', () => {
       voice: 'male_deep',
       music: 'piano_rain',
     });
+  });
+});
+
+describe('StudioService – quota Radio AI', () => {
+  it('chỉ trừ lượt khi tạo Radio AI; hết lượt thì không tạo bài', async () => {
+    const { prisma, quota, service } = setup();
+    await service.createPost('u1', { ...base, audio: { mode: 'none' } });
+    expect(quota.consume).not.toHaveBeenCalled();
+
+    await service.createPost(
+      'u1',
+      { ...base, audio: { mode: 'ai', voice: 'female_warm', music: null } },
+      'AUTHOR',
+    );
+    expect(quota.consume).toHaveBeenCalledWith('u1', 'AUTHOR');
+
+    quota.consume.mockRejectedValueOnce(new Error('hết lượt'));
+    prisma.post.create.mockClear();
+    await expect(
+      service.createPost('u1', {
+        ...base,
+        audio: { mode: 'ai', voice: 'female_warm', music: null },
+      }),
+    ).rejects.toThrow('hết lượt');
+    expect(prisma.post.create).not.toHaveBeenCalled();
+  });
+
+  it('hoàn lượt khi ghi bài lỗi', async () => {
+    const { prisma, quota, service } = setup();
+    prisma.post.create.mockRejectedValueOnce(new Error('db down'));
+    await expect(
+      service.createPost('u1', {
+        ...base,
+        audio: { mode: 'ai', voice: 'male_deep', music: null },
+      }),
+    ).rejects.toThrow('db down');
+    expect(quota.refund).toHaveBeenCalledWith('u1');
   });
 });

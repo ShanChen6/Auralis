@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
 import { AudioStatus } from '../generated/prisma/enums.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { ContentEvents } from '../security/web-revalidator.service.js';
 import { AudioAiClient } from './audio-ai.client.js';
 import {
   EDGE_VOICE_NAMES,
@@ -20,6 +21,7 @@ export class RadioGenerationProcessor extends WorkerHost {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audioAi: AudioAiClient,
+    private readonly events: ContentEvents,
   ) {
     super();
   }
@@ -53,8 +55,9 @@ export class RadioGenerationProcessor extends WorkerHost {
         ? 'VoiceStudio'
         : EDGE_VOICE_NAMES[voice === 'male_deep' ? 'male_deep' : 'female_warm'];
 
-    await this.prisma.post.update({
+    const updated = await this.prisma.post.update({
       where: { id: postId },
+      select: { slug: true, status: true },
       data: {
         audioUrl: result.audioUrl,
         duration: Math.round(result.duration),
@@ -64,6 +67,9 @@ export class RadioGenerationProcessor extends WorkerHost {
         content: { update: { timestamps: result.timestamps } },
       },
     });
+    // Bài đã xuất bản có audio mới → làm mới cache và trang
+    if (updated.status === 'PUBLISHED')
+      await this.events.postsChanged([updated.slug]);
     this.logger.log(
       `Đã tạo Radio cho bài ${postId} (${result.duration}s, ${result.engine})`,
     );

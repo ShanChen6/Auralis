@@ -7,6 +7,7 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import {
   type LoginInput,
@@ -27,7 +28,9 @@ import {
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
+  /** Chống tạo tài khoản hàng loạt / dò mật khẩu: 10 lần mỗi phút */
   @Post('register')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async register(
     @Body({ schema: registerSchema }) body: RegisterInput,
     @Res({ passthrough: true }) res: Response,
@@ -38,6 +41,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @HttpCode(200)
   async login(
     @Body({ schema: loginSchema }) body: LoginInput,

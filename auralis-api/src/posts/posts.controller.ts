@@ -2,11 +2,24 @@ import {
   BadRequestException,
   Controller,
   Get,
+  HttpCode,
   Param,
+  ParseUUIDPipe,
+  Post,
   Query,
+  Req,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import type { Request } from 'express';
+import { extractToken } from '../auth/auth.guard.js';
+import { AuthService } from '../auth/auth.service.js';
 import { PostsService, isMoodTag } from './posts.service.js';
-import type { PostCard, PostDetail, PostList } from './posts.types.js';
+import type {
+  PostCard,
+  PostDetail,
+  PostList,
+  RankedPost,
+} from './posts.types.js';
 
 function parseLimit(value: string | undefined): number | undefined {
   if (value === undefined) return undefined;
@@ -19,7 +32,31 @@ function parseLimit(value: string | undefined): number | undefined {
 
 @Controller('posts')
 export class PostsController {
-  constructor(private readonly posts: PostsService) {}
+  constructor(
+    private readonly posts: PostsService,
+    private readonly auth: AuthService,
+  ) {}
+
+  @Get('top-week')
+  topWeek(@Query('limit') limit?: string): Promise<RankedPost[]> {
+    return this.posts.topOfWeek(parseLimit(limit));
+  }
+
+  /** Trình phát gọi khi người dùng đã nghe đủ lâu (≥30s hoặc nửa bài) */
+  @Post(':id/listen')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  async listen(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request,
+  ): Promise<{ counted: boolean }> {
+    const token = extractToken(req);
+    const session = token ? await this.auth.verifyToken(token) : null;
+    return this.posts.recordListen(
+      id,
+      session ? `user:${session.sub}` : `ip:${req.ip ?? 'unknown'}`,
+    );
+  }
 
   @Get('featured')
   featured(@Query('limit') limit?: string): Promise<PostCard[]> {

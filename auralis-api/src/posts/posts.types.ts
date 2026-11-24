@@ -36,3 +36,7 @@ export interface PostList {
   items: PostCard[];
   nextCursor: string | null;
 }
+
+export interface RankedPost extends PostCard {
+  weeklyListens: number;
+}

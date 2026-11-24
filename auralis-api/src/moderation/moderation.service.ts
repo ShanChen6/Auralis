@@ -12,6 +12,7 @@ import {
 } from '../generated/prisma/enums.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { ContentEvents } from '../security/web-revalidator.service.js';
 import type {
   ApprovePostInput,
   RejectInput,
@@ -70,7 +71,10 @@ export type ReviewNarration = Prisma.NarrationClaimGetPayload<{
 
 @Injectable()
 export class ModerationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly events: ContentEvents,
+  ) {}
 
   async stats(): Promise<{
     pendingPosts: number;
@@ -109,7 +113,7 @@ export class ModerationService {
         'Radio AI đang được tạo, hãy đợi xong rồi duyệt',
       );
     }
-    return this.prisma.post.update({
+    const published = await this.prisma.post.update({
       where: { id },
       data: {
         status: PostStatus.PUBLISHED,
@@ -123,6 +127,8 @@ export class ModerationService {
       },
       select: reviewSelect,
     });
+    await this.events.postsChanged([published.slug]);
+    return published;
   }
 
   async rejectPost(
@@ -147,11 +153,15 @@ export class ModerationService {
 
   async updatePost(id: string, input: UpdatePostInput): Promise<ReviewPost> {
     await this.findPost(id);
-    return this.prisma.post.update({
+    const post = await this.prisma.post.update({
       where: { id },
       data: input,
       select: reviewSelect,
     });
+    if (post.status === PostStatus.PUBLISHED) {
+      await this.events.postsChanged([post.slug]);
+    }
+    return post;
   }
 
   listNarrations(status: NarrationStatus): Promise<ReviewNarration[]> {
@@ -195,7 +205,7 @@ export class ModerationService {
     }
     const paragraphs = splitParagraphs(claim.post.content?.content ?? '');
 
-    return this.prisma.$transaction(async (tx) => {
+    const approved = await this.prisma.$transaction(async (tx) => {
       await tx.post.update({
         where: { id: claim.post.id },
         data: {
@@ -229,6 +239,8 @@ export class ModerationService {
         select: narrationSelect,
       });
     });
+    await this.events.postsChanged([approved.post.slug]);
+    return approved;
   }
 
   async rejectNarration(

@@ -2,12 +2,15 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { MoodTag, PostStatus } from '../generated/prisma/enums.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { CacheService } from '../redis/cache.service.js';
+import { ListenRankingService } from '../security/listen-ranking.service.js';
 import { splitParagraphs } from '../common/text.js';
 import type {
   PostCard,
   PostDetail,
   PostList,
   PostTimestamp,
+  RankedPost,
 } from './posts.types.js';
 
 const cardSelect = {
@@ -59,21 +62,42 @@ function toTimestamps(value: unknown): PostTimestamp[] {
   );
 }
 
+/** TTL cache Redis (giây) – cache còn bị xóa ngay khi có bài xuất bản/cập nhật */
+const CACHE_TTL = 600;
+
 @Injectable()
 export class PostsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cache: CacheService,
+    private readonly ranking: ListenRankingService,
+  ) {}
 
-  async findFeatured(limit = 5): Promise<PostCard[]> {
+  findFeatured(limit = 5): Promise<PostCard[]> {
+    const take = Math.min(Math.max(limit, 1), 20);
+    return this.cache.getOrSet(`posts:featured:${take}`, CACHE_TTL, () =>
+      this.queryFeatured(take),
+    );
+  }
+
+  private async queryFeatured(limit: number): Promise<PostCard[]> {
     const rows = await this.prisma.post.findMany({
       where: { status: PostStatus.PUBLISHED, isFeatured: true },
       orderBy: { publishedAt: 'desc' },
-      take: Math.min(Math.max(limit, 1), 20),
+      take: limit,
       select: cardSelect,
     });
     return rows.map(toCard);
   }
 
-  async findMany(query: ListPostsQuery = {}): Promise<PostList> {
+  findMany(query: ListPostsQuery = {}): Promise<PostList> {
+    // Chỉ cache trang đầu (trang chủ, bộ lọc tâm trạng/chuyên mục)
+    if (query.cursor) return this.queryMany(query);
+    const key = `posts:list:${query.mood ?? '-'}:${query.category ?? '-'}:${query.limit ?? 20}`;
+    return this.cache.getOrSet(key, CACHE_TTL, () => this.queryMany(query));
+  }
+
+  private async queryMany(query: ListPostsQuery): Promise<PostList> {
     const take = Math.min(Math.max(query.limit ?? 20, 1), 50);
     const rows = await this.prisma.post.findMany({
       where: {
@@ -92,6 +116,16 @@ export class PostsService {
   }
 
   async findBySlug(slug: string): Promise<PostDetail> {
+    const post = await this.cache.getOrSet(
+      `posts:detail:${slug}`,
+      CACHE_TTL,
+      () => this.queryBySlug(slug),
+    );
+    if (!post) throw new NotFoundException(`Không tìm thấy số Radio "${slug}"`);
+    return post;
+  }
+
+  private async queryBySlug(slug: string): Promise<PostDetail | null> {
     const row = await this.prisma.post.findFirst({
       where: { slug, status: PostStatus.PUBLISHED },
       select: {
@@ -101,9 +135,7 @@ export class PostsService {
         },
       },
     });
-    if (!row) {
-      throw new NotFoundException(`Không tìm thấy số Radio "${slug}"`);
-    }
+    if (!row) return null;
     const { content, ...card } = row;
     return {
       ...toCard(card),
@@ -111,5 +143,65 @@ export class PostsService {
       timestamps: toTimestamps(content?.timestamps),
       wordCount: content?.wordCount ?? 0,
     };
+  }
+
+  /** "Nghe nhiều trong tuần": theo lượt nghe tuần này, bù bằng tổng lượt nghe nếu chưa đủ */
+  topOfWeek(limit = 5): Promise<RankedPost[]> {
+    const take = Math.min(Math.max(limit, 1), 20);
+    return this.cache.getOrSet(
+      `posts:top-week:${take}`,
+      CACHE_TTL,
+      async () => {
+        const weekly = await this.ranking.topOfWeek(take);
+        const weeklyIds = weekly.map((w) => w.postId);
+        const [ranked, extra] = await Promise.all([
+          weeklyIds.length
+            ? this.prisma.post.findMany({
+                where: { id: { in: weeklyIds }, status: PostStatus.PUBLISHED },
+                select: cardSelect,
+              })
+            : Promise.resolve([]),
+          this.prisma.post.findMany({
+            where: {
+              status: PostStatus.PUBLISHED,
+              audioUrl: { not: null },
+              id: { notIn: weeklyIds },
+            },
+            orderBy: [{ listenCount: 'desc' }, { publishedAt: 'desc' }],
+            take,
+            select: cardSelect,
+          }),
+        ]);
+        const byId = new Map(ranked.map((p) => [p.id, p]));
+        const fromWeek = weekly
+          .filter((w) => byId.has(w.postId))
+          .map((w) => ({
+            ...toCard(byId.get(w.postId)!),
+            weeklyListens: w.listens,
+          }));
+        const filler = extra.map((p) => ({ ...toCard(p), weeklyListens: 0 }));
+        return [...fromWeek, ...filler].slice(0, take);
+      },
+    );
+  }
+
+  /** Ghi một lượt nghe; cùng người nghe cùng bài chỉ tính 1 lần mỗi giờ */
+  async recordListen(
+    postId: string,
+    listener: string,
+  ): Promise<{ counted: boolean }> {
+    const exists = await this.prisma.post.findFirst({
+      where: { id: postId, status: PostStatus.PUBLISHED },
+      select: { id: true },
+    });
+    if (!exists) throw new NotFoundException('Không tìm thấy số Radio');
+    const counted = await this.ranking.record(postId, listener);
+    if (counted) {
+      await this.prisma.post.update({
+        where: { id: postId },
+        data: { listenCount: { increment: 1 } },
+      });
+    }
+    return { counted };
   }
 }

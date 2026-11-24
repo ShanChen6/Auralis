@@ -23,7 +23,13 @@ export class StudioController {
     @CurrentUser() user: SessionPayload,
     @Body({ schema: createPostSchema }) body: CreatePostInput,
   ): Promise<StudioPost> {
-    return this.studio.createPost(user.sub, body);
+    return this.studio.createPost(user.sub, body, user.role);
+  }
+
+  /** Số lượt tạo Radio AI còn lại hôm nay */
+  @Get('quota')
+  quota(@CurrentUser() user: SessionPayload) {
+    return this.studio.quotaStatus(user.sub, user.role);
   }
 
   /** Bài của tôi kèm trạng thái duyệt / trạng thái tạo Radio */

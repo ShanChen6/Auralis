@@ -24,7 +24,12 @@ import {
   voiceFromName,
 } from '../radio-queue/radio-queue.constants.js';
 import { RadioQueueService } from '../radio-queue/radio-queue.service.js';
+import {
+  AiQuotaService,
+  type QuotaStatus,
+} from '../security/ai-quota.service.js';
 import { StorageService } from '../storage/storage.service.js';
+import type { UserRole } from '../generated/prisma/enums.js';
 import type { CreatePostInput } from './studio.schemas.js';
 
 const studioSelect = {
@@ -56,11 +61,17 @@ export class StudioService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly radioQueue: RadioQueueService,
+    private readonly quota: AiQuotaService,
   ) {}
+
+  quotaStatus(userId: string, role: UserRole): Promise<QuotaStatus> {
+    return this.quota.status(userId, role);
+  }
 
   async createPost(
     authorId: string,
     input: CreatePostInput,
+    role: UserRole = 'AUTHOR',
   ): Promise<StudioPost> {
     if (input.categorySlug) {
       const category = await this.prisma.category.findUnique({
@@ -78,9 +89,34 @@ export class StudioService {
       );
     }
 
+    // Giữ lượt tạo Radio AI trong ngày trước khi ghi DB (hoàn lại nếu tạo bài lỗi)
+    if (input.audio.mode === 'ai') await this.quota.consume(authorId, role);
+
     const paragraphs = splitParagraphs(input.content);
     const audio = this.audioFields(input, paragraphs);
-    const post = await this.prisma.post.create({
+    const post = await this.createRecord(authorId, input, audio).catch(
+      async (error: unknown) => {
+        if (input.audio.mode === 'ai') await this.quota.refund(authorId);
+        throw error;
+      },
+    );
+
+    if (input.audio.mode === 'ai') {
+      await this.enqueueOrFail(post.id, {
+        postId: post.id,
+        voice: input.audio.voice,
+        music: input.audio.music,
+      });
+    }
+    return post;
+  }
+
+  private async createRecord(
+    authorId: string,
+    input: CreatePostInput,
+    audio: ReturnType<StudioService['audioFields']>,
+  ): Promise<StudioPost> {
+    return this.prisma.post.create({
       data: {
         title: input.title,
         slug: await this.uniqueSlug(input.title),
@@ -102,15 +138,6 @@ export class StudioService {
       },
       select: studioSelect,
     });
-
-    if (input.audio.mode === 'ai') {
-      await this.enqueueOrFail(post.id, {
-        postId: post.id,
-        voice: input.audio.voice,
-        music: input.audio.music,
-      });
-    }
-    return post;
   }
 
   listMine(authorId: string): Promise<StudioPost[]> {

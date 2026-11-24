@@ -33,9 +33,15 @@ export function CreatorEditor() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
+  const [quota, setQuota] = useState<{ limit: number | null; remaining: number | null } | null>(null);
+
   useEffect(() => {
     api<{ slug: string; name: string }[]>("/categories").then(setCategories).catch(() => setCategories([]));
+    api<{ limit: number | null; remaining: number | null }>("/studio/quota").then(setQuota).catch(() => setQuota(null));
   }, []);
+
+  // JSON không có Infinity → biên tập viên/quản trị nhận null (không giới hạn)
+  const aiExhausted = quota?.remaining === 0;
 
   const paragraphs = useMemo(() => splitParagraphs(content), [content]);
   const words = useMemo(() => countWords(content), [content]);
@@ -167,7 +173,11 @@ export function CreatorEditor() {
               onSelect={() => setMode("ai")}
               icon={<Sparkles className="size-4" />}
               title="Tạo Radio AI tự động"
-              description="Giọng đọc AI + nhạc nền, tự hậu kỳ."
+              description={
+                quota?.limit != null
+                  ? `Giọng đọc AI + nhạc nền, tự hậu kỳ. Còn ${quota.remaining}/${quota.limit} lượt hôm nay.`
+                  : "Giọng đọc AI + nhạc nền, tự hậu kỳ."
+              }
             />
             <ChoiceCard
               selected={mode === "upload"}
@@ -220,11 +230,19 @@ export function CreatorEditor() {
             </div>
           )}
 
+          {mode === "ai" && aiExhausted && (
+            <Alert tone="info">Bạn đã dùng hết lượt tạo Radio AI hôm nay. Hãy tự thu âm, hoặc quay lại vào ngày mai nhé.</Alert>
+          )}
           {mode === "upload" && <AudioUpload value={upload} onChange={setUpload} />}
         </section>
 
         {error && <Alert>{error}</Alert>}
-        <Button type="submit" size="lg" className="w-full" disabled={pending || words > MAX_WORDS}>
+        <Button
+          type="submit"
+          size="lg"
+          className="w-full"
+          disabled={pending || words > MAX_WORDS || (mode === "ai" && aiExhausted)}
+        >
           {pending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
           Gửi duyệt
         </Button>

@@ -43,7 +43,19 @@ export function AudioEngine() {
     });
 
     const { _sync, _onEnded } = usePlayer.getState();
-    const onTime = () => _sync({ currentTime: audio.currentTime });
+    const counted = new Set<string>();
+    const recordListen = () => {
+      const track = usePlayer.getState().current();
+      if (!track || counted.has(track.id)) return;
+      const threshold = Math.min(30, (audio.duration || 60) / 2);
+      if (audio.currentTime < threshold) return;
+      counted.add(track.id);
+      void fetch(`/backend/posts/${track.id}/listen`, { method: "POST" }).catch(() => counted.delete(track.id));
+    };
+    const onTime = () => {
+      _sync({ currentTime: audio.currentTime });
+      recordListen();
+    };
     const onMeta = () => Number.isFinite(audio.duration) && _sync({ duration: audio.duration });
     const onPlay = () => _sync({ isPlaying: true });
     const onPause = () => _sync({ isPlaying: false });

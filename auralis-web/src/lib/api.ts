@@ -1,6 +1,6 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
-import type { PostCard, PostDetail, PostList } from "./types";
+import type { PostCard, PostDetail, PostList, RankedPost } from "./types";
 
 const API_URL = (process.env.API_URL ?? "http://localhost:4000/api").replace(/\/$/, "");
 
@@ -19,21 +19,29 @@ async function getJson<T>(path: string): Promise<T | null> {
 
 export async function getFeaturedPosts(): Promise<PostCard[]> {
   "use cache";
-  cacheLife("minutes");
+  cacheLife("hours");
   cacheTag("posts", "featured");
   return (await getJson<PostCard[]>("/posts/featured?limit=5")) ?? [];
 }
 
 export async function getLatestPosts(limit = 12): Promise<PostCard[]> {
   "use cache";
-  cacheLife("minutes");
+  cacheLife("hours");
   cacheTag("posts");
   return (await getJson<PostList>(`/posts?limit=${limit}`))?.items ?? [];
 }
 
 export async function getPost(slug: string): Promise<PostDetail | null> {
   "use cache";
-  cacheLife("minutes");
+  cacheLife("hours");
   cacheTag("posts", `post:${slug}`);
   return getJson<PostDetail>(`/posts/${encodeURIComponent(slug)}`);
+}
+
+/** Bảng xếp hạng thay đổi theo lượt nghe → làm mới mỗi vài phút */
+export async function getTopOfWeek(limit = 5): Promise<RankedPost[]> {
+  "use cache";
+  cacheLife("minutes");
+  cacheTag("top-week");
+  return (await getJson<RankedPost[]>(`/posts/top-week?limit=${limit}`)) ?? [];
 }

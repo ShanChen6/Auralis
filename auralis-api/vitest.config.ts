@@ -8,6 +8,6 @@ export default defineConfig({
     globals: true,
     root: './',
     include: ['**/*.spec.ts'],
-    env: { DISABLE_QUEUE: 'true' },
+    env: { DISABLE_QUEUE: 'true', DISABLE_REDIS: 'true' },
   },
 });

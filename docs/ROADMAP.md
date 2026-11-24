@@ -141,11 +141,11 @@ Yêu cầu kỹ thuật:
 ### GIAI ĐOẠN 5: Tối ưu Hiệu năng Tải Trang (ISR/Redis), Bảo mật & Triển khai Production (Tuần 10)
 *Mục tiêu: Đảm bảo tốc độ mở bài blog/radio dưới 100ms khi lượng bài viết lên tới hàng trăm nghìn bài, kiểm soát chi phí vận hành và triển khai toàn bộ hệ thống lên Internet.*
 
-- [ ] **Task 5.1: Tối ưu Tốc độ Đọc với Next.js ISR & Upstash Redis**
+- [x] **Task 5.1: Tối ưu Tốc độ Đọc với Next.js ISR & Upstash Redis**
   - Cấu hình **ISR (Incremental Static Regeneration)** cho trang chi tiết số Radio (`/radio/[slug]`): tự động tạo trang tĩnh ở tầng Edge và chỉ tái tạo lại khi Admin cập nhật bài viết (On-Demand Revalidation), giúp tải trang gần như tức thì (`< 100ms`).
   - Tích hợp **Upstash Redis** trong NestJS để lưu bộ nhớ đệm (Cache) cho các truy vấn nặng ngoài trang chủ: *"5 Số Radio nổi bật trên Spatial Carousel"*, *"Bảng xếp hạng nghe nhiều trong tuần"* và danh sách chuyên mục, giảm tới 90% số lượt truy vấn trực tiếp vào PostgreSQL.
 
-- [ ] **Task 5.2: Bảo mật Hệ thống & Chống Spam Tài nguyên AI**
+- [x] **Task 5.2: Bảo mật Hệ thống & Chống Spam Tài nguyên AI**
   - Cài đặt `@nestjs/throttler` kết hợp Redis để áp dụng **Rate Limiting**: Giới hạn mỗi tài khoản người dùng chỉ được tạo tối đa `3 số Radio AI/ngày` và giới hạn độ dài kịch bản (VD: tối đa 3.000 từ/bài) để chống spam làm quá tải dịch vụ Python FastAPI.
   - Kiểm tra định dạng MIME type và giới hạn dung lượng file tải lên Cloudflare R2 (tối đa 5MB cho ảnh bìa, 50MB cho file MP3).
 
