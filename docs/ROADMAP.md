@@ -57,7 +57,7 @@ Yêu cầu kỹ thuật:
   - Tạo kho nhạc nền mẫu (`piano_rain.mp3`, `lofi_warm.mp3`, `acoustic_night.mp3`).
   - Lập trình hiệu ứng **Auto-ducking**: 3 giây Intro nhạc dạo đầu lớn (`-6dB`), tự động hạ nhỏ nhạc nền (`-18dB`) khi giọng đọc MC cất lên, và tăng nhạc kèm `fade_out` ở 4 giây Outro cuối bài.
   - Xuất kèm dữ liệu mốc thời gian từng đoạn văn (`timestamps`) để Frontend đồng bộ chữ.
-- [ ] **Task 2.3: Đóng gói API FastAPI & Upload R2**
+- [x] **Task 2.3: Đóng gói API FastAPI & Upload R2**
   - Xây dựng endpoint `POST /api/v1/generate-radio` nhận kịch bản, tự động hậu kỳ, đẩy file MP3 thành phẩm lên Cloudflare R2 và trả về `audioUrl`, `duration`, `timestamps`.
 
 #### Prompt triển khai Giai đoạn 2:

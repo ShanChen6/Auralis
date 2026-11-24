@@ -1,5 +1,6 @@
 """Lõi hậu kỳ: Intro nhạc lớn → Auto-ducking khi có giọng → Outro tăng nhạc + fade out."""
 
+import io
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -59,6 +60,11 @@ class RadioMix:
 
     def export_mp3(self, path_or_buffer, bitrate: str = "128k") -> None:
         self.audio.export(path_or_buffer, format="mp3", bitrate=bitrate)
+
+    def to_mp3_bytes(self, bitrate: str = "128k") -> bytes:
+        buffer = io.BytesIO()
+        self.export_mp3(buffer, bitrate=bitrate)
+        return buffer.getvalue()
 
 
 def to_array(segment: AudioSegment) -> np.ndarray:

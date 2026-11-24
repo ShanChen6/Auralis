@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass
 
 from app.radio.mixer import RadioMix, RadioMixer
@@ -39,7 +40,10 @@ class RadioProducer:
         # Nạp nhạc trước để báo lỗi sớm, không tốn công gọi TTS
         music = self._music.load(music_id) if music_id else None
         speech = await self._synthesizer.synthesize(script, engine=engine, voice=voice, rate=rate)
-        mix = self._mixer.mix(speech.audio, speech.paragraphs, music, music_id=music_id)
+        # Trộn âm thanh tốn CPU (numpy + ffmpeg): chạy ở thread riêng để không chặn event loop
+        mix = await asyncio.to_thread(
+            self._mixer.mix, speech.audio, speech.paragraphs, music, music_id=music_id
+        )
         return RadioEpisode(
             mix=mix,
             engine=speech.engine,

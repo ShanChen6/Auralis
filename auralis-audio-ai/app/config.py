@@ -32,6 +32,35 @@ class Settings(BaseSettings):
     voicestudio_tts_path: str = "/api/tts"
     voicestudio_timeout_s: float = 120.0
 
+    # --- API generate-radio ---
+    #: Nếu đặt, mọi request tới /api/v1/generate-radio phải có header X-API-Key khớp
+    audio_ai_api_key: str | None = None
+    radio_max_words: int = 3000
+    radio_max_concurrent: int = 2
+    radio_mp3_bitrate: str = "128k"
+
+    # --- Lưu trữ: Cloudflare R2 (thiếu biến R2_* thì lưu local trong media/) ---
+    r2_account_id: str | None = None
+    r2_access_key_id: str | None = None
+    r2_secret_access_key: str | None = None
+    r2_bucket: str | None = None
+    r2_public_url: str | None = None
+    r2_endpoint: str | None = None
+    local_media_dir: str = "media"
+    public_base_url: str = "http://localhost:8000"
+
+    @property
+    def r2_configured(self) -> bool:
+        return all(
+            [
+                self.r2_account_id,
+                self.r2_access_key_id,
+                self.r2_secret_access_key,
+                self.r2_bucket,
+                self.r2_public_url,
+            ]
+        )
+
 
 @lru_cache
 def get_settings() -> Settings:
