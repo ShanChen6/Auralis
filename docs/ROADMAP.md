@@ -100,3 +100,73 @@ Yêu cầu kỹ thuật:
 4. Xây dựng trang chi tiết bài Blog + Radio theo phong cách **Interactive Storytelling**: tự động bôi sáng đoạn văn tương ứng với giây đang phát của file audio và tích hợp thanh trượt trộn thêm âm thanh môi trường (tiếng mưa rơi, tiếng lửa trại).
 ```
 
+---
+
+### GIAI ĐOẠN 4: Cổng Sáng Tạo Cộng Đồng (UGC) & Phòng Nghe Chung Thời Gian Thực (Tuần 8 – Tuần 9)
+*Mục tiêu: Xây dựng không gian sáng tạo nội dung cho cộng đồng (tác giả viết tản văn, cộng tác viên lồng tiếng hoặc tạo giọng đọc AI) và phòng phát thanh nghe chung theo thời gian thực qua Socket.io.*
+
+- [ ] **Task 4.1: Xây dựng Cổng Sáng Tạo (Creator Studio)**
+  - Thiết kế trình soạn thảo tản văn/truyện ngắn (Rich Text / Markdown Editor) hỗ trợ chia đoạn văn bản rõ ràng để đồng bộ thời gian phát.
+  - Xây dựng 2 tùy chọn xuất bản âm thanh cho tác giả:
+    1. **Tự thu âm & Tải lên:** Tải trực tiếp file `.mp3`/`.wav` cá nhân lên **Cloudflare R2** qua Presigned URL.
+    2. **Tạo Radio AI Tự động:** Chọn giọng đọc (Nữ trầm ấm / Nam sâu lắng / Giọng Studio), chọn nhạc nền (*Piano mưa, Lo-fi ấm áp, Guitar mộc*) và gọi API sang dịch vụ FastAPI.
+  - Lưu bài viết mới ở trạng thái `PENDING` (Chờ duyệt) kèm thông báo trạng thái cho tác giả.
+
+- [ ] **Task 4.2: Hệ thống Kiểm duyệt Nội dung (Editorial & Admin Dashboard)**
+  - Xây dựng màn hình quản trị dành cho Biên tập viên/Admin: Nghe thử bản audio, rà soát nội dung văn bản, chỉnh sửa thẻ tâm trạng (`moodTag`) và bấm duyệt xuất bản (`PENDING -> PUBLISHED`) hoặc từ chối kèm lý do.
+  - Xây dựng tính năng ghép cặp cộng đồng: Cho phép một thành viên đăng bài viết chỉ có chữ (`TEXT_ONLY`) để các thành viên có giọng đọc hay đăng ký thu âm lồng tiếng cho bài viết đó.
+
+- [ ] **Task 4.3: Phòng Nghe Chung Trực Tiếp (Live Radio Room với Socket.io)**
+  - Xây dựng `LiveRoomGateway` trong NestJS quản lý các phòng phát thanh trực tiếp theo khung giờ hoặc chủ đề (VD: *"Trạm Đêm Mưa 22h"*, *"Góc Chữa Lành Cuối Tuần"*).
+  - **Cơ chế Đồng bộ Tiến độ Nghe (Audio Sync):** Server lưu mốc thời gian bắt đầu phát (`startedAt`) của số Radio hiện tại trong phòng. Khi một thính giả mới bấm tham gia phòng, server tính toán `currentTimestamp = now - startedAt` và gửi về client để trình phát tự động tua đến đúng giây mọi người đang nghe.
+  - Tích hợp khung trò chuyện trực tiếp (Live Chat) tối giản theo phong cách kính mờ (Liquid Glass) và hiệu ứng thả biểu tượng cảm xúc (tim, tách trà ấm, ngôi sao) bay nhẹ trên màn hình theo thời gian thực.
+
+#### Prompt triển khai Giai đoạn 4 (Copy & Dán vào AI để sinh code):
+```text
+Đóng vai trò là Senior Fullstack Real-time Developer (NestJS + Socket.io + Next.js + TailwindCSS). Hãy xây dựng chi tiết 2 phân hệ cộng đồng cốt lõi cho nền tảng Blog & Radio "Auralis":
+
+Yêu cầu kỹ thuật:
+1. **Cổng Sáng Tạo (Creator Studio) & Kiểm duyệt:**
+   - Viết component giao diện Next.js cho phép tác giả nhập tiêu đề, chọn thẻ tâm trạng (`moodTag`), soạn thảo nội dung tản văn và chọn 1 trong 2 cách tạo âm thanh: Upload file MP3 trực tiếp lên Cloudflare R2 hoặc bấm "Tạo Radio AI tự động" (gọi endpoint FastAPI `/api/v1/generate-radio`).
+   - Viết các endpoint NestJS (`POST /posts`, `PATCH /posts/:id/approve`) quản lý luồng trạng thái bài viết từ `PENDING` sang `PUBLISHED` kèm Guard phân quyền Admin/Editor.
+
+2. **Phòng Nghe Chung Trực Tiếp (Live Radio Room với Socket.io):**
+   - Viết `LiveRoomGateway` hoàn chỉnh trong NestJS sử dụng Socket.io Rooms (`room_${roomId}`).
+   - Lập trình cơ chế **Audio Sync**: Khi người dùng emit sự kiện `join_room`, server trả về `currentTrackUrl`, `startedAt` và `serverTime` để Frontend tính toán chính xác độ trễ và đồng bộ tiến độ phát audio của tất cả người nghe trong phòng.
+   - Xây dựng sự kiện `send_message` (chat trực tiếp trong phòng) và `send_reaction` (bắn hiệu ứng biểu tượng cảm xúc real-time) kèm giao diện khung phòng nghe tối giản trên Next.js.
+```
+
+---
+
+### GIAI ĐOẠN 5: Tối ưu Hiệu năng Tải Trang (ISR/Redis), Bảo mật & Triển khai Production (Tuần 10)
+*Mục tiêu: Đảm bảo tốc độ mở bài blog/radio dưới 100ms khi lượng bài viết lên tới hàng trăm nghìn bài, kiểm soát chi phí vận hành và triển khai toàn bộ hệ thống lên Internet.*
+
+- [ ] **Task 5.1: Tối ưu Tốc độ Đọc với Next.js ISR & Upstash Redis**
+  - Cấu hình **ISR (Incremental Static Regeneration)** cho trang chi tiết số Radio (`/radio/[slug]`): tự động tạo trang tĩnh ở tầng Edge và chỉ tái tạo lại khi Admin cập nhật bài viết (On-Demand Revalidation), giúp tải trang gần như tức thì (`< 100ms`).
+  - Tích hợp **Upstash Redis** trong NestJS để lưu bộ nhớ đệm (Cache) cho các truy vấn nặng ngoài trang chủ: *"5 Số Radio nổi bật trên Spatial Carousel"*, *"Bảng xếp hạng nghe nhiều trong tuần"* và danh sách chuyên mục, giảm tới 90% số lượt truy vấn trực tiếp vào PostgreSQL.
+
+- [ ] **Task 5.2: Bảo mật Hệ thống & Chống Spam Tài nguyên AI**
+  - Cài đặt `@nestjs/throttler` kết hợp Redis để áp dụng **Rate Limiting**: Giới hạn mỗi tài khoản người dùng chỉ được tạo tối đa `3 số Radio AI/ngày` và giới hạn độ dài kịch bản (VD: tối đa 3.000 từ/bài) để chống spam làm quá tải dịch vụ Python FastAPI.
+  - Kiểm tra định dạng MIME type và giới hạn dung lượng file tải lên Cloudflare R2 (tối đa 5MB cho ảnh bìa, 50MB cho file MP3).
+
+- [ ] **Task 5.3: Đóng gói Docker & Triển khai Hạ tầng (Deployment)**
+  - Viết `Dockerfile` đa tầng (Multi-stage build) gọn nhẹ cho dịch vụ **Python FastAPI** (tích hợp sẵn `ffmpeg` và các file nhạc nền mẫu bên trong container) để triển khai miễn phí lên **Hugging Face Spaces** (gói CPU 16GB RAM) hoặc **Render**.
+  - Triển khai **PostgreSQL** lên **Supabase** hoặc **Neon** (kích hoạt Connection Pooling qua PgBouncer để chịu tải kết nối đồng thời lớn).
+  - Triển khai **Backend NestJS** lên **Render / Railway** (bật hỗ trợ WebSockets cho Socket.io) và **Frontend Next.js** lên **Vercel**.
+  - Rà soát toàn bộ biến môi trường (`.env`), cấu hình tên miền tùy chỉnh cho Cloudflare R2 CDN và kiểm thử trải nghiệm thực tế trên cả trình duyệt máy tính lẫn điện thoại (iOS/Android).
+
+#### Prompt triển khai Giai đoạn 5 (Copy & Dán vào AI để sinh code):
+```text
+Đóng vai trò là DevOps & Performance Engineer. Hãy hướng dẫn tôi tối ưu hiệu năng chịu tải lớn và triển khai toàn bộ hệ thống "Auralis" (gồm Next.js, NestJS, Python FastAPI, PostgreSQL, Upstash Redis và Cloudflare R2) lên môi trường Production với chi phí tối ưu nhất.
+
+Yêu cầu kỹ thuật:
+1. **Tối ưu Caching & Tải trang:**
+   - Viết code mẫu cấu hình **Next.js ISR** kết hợp hàm `revalidatePath` khi Admin duyệt bài mới từ NestJS.
+   - Viết một Cache Interceptor/Service trong NestJS sử dụng **Upstash Redis** để cache danh sách bài viết nổi bật ngoài trang chủ (TTL 10 phút) và tự động xóa cache khi có bài mới xuất bản.
+2. **Bảo mật & Chống Spam (Rate Limiting):**
+   - Viết cấu hình `@nestjs/throttler` giới hạn số lượt gọi API tạo giọng đọc AI theo từng `userId` (tối đa 3 lần/ngày) và validate dữ liệu đầu vào chặt chẽ bằng `class-validator`.
+3. **Đóng gói & Triển khai (Deployment):**
+   - Viết `Dockerfile` hoàn chỉnh cho dịch vụ **Python FastAPI** (đã cài đặt sẵn `ffmpeg` trên nền `python:3.11-slim`) để chạy ổn định trên Hugging Face Spaces hoặc Render.
+   - Cung cấp bảng danh sách toàn bộ biến môi trường (`.env`) cần cấu hình giữa Vercel (Next.js), Render/Railway (NestJS), Hugging Face Spaces (FastAPI), Supabase/Neon (PostgreSQL) và Cloudflare R2.
+```
+
