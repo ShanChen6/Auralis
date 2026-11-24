@@ -27,7 +27,7 @@
 - [x] **Task 1.1: Khởi tạo Monorepo / 3 Phân hệ**
   - Khởi tạo `auralis-web` (Next.js), `auralis-api` (NestJS), và `auralis-audio-ai` (Python FastAPI).
   - Cấu hình Docker Compose chạy PostgreSQL và Redis local.
-- [ ] **Task 1.2: Thiết kế Database Tách lớp (`schema.prisma`)**
+- [x] **Task 1.2: Thiết kế Database Tách lớp (`schema.prisma`)**
   - Tách riêng bảng `Posts` (chỉ chứa metadata nhẹ: `id`, `title`, `slug`, `summary`, `coverUrl`, `audioUrl`, `duration`, `moodTag`, `status`, `createdAt`) và bảng `PostContents` (chứa cột `content` văn bản dài và `timestampsJson` phục vụ chạy chữ Karaoke).
   - Thiết kế các bảng phụ trợ: `Users` (Thính giả, Tác giả, Admin), `Categories`, `Playlists`, `Comments`, và `LiveRooms`.
   - Tạo Index tối ưu cho tìm kiếm toàn văn (Full-Text Search) và lọc nhanh theo tâm trạng/chuyên mục.

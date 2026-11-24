@@ -16,6 +16,9 @@
     "lint": "pnpm -r lint",
     "test": "pnpm --filter auralis-api test",
     "db:up": "docker compose up -d",
-    "db:down": "docker compose down"
+    "db:down": "docker compose down",
+    "db:migrate": "pnpm --filter auralis-api db:migrate",
+    "db:seed": "pnpm --filter auralis-api db:seed",
+    "db:studio": "pnpm --filter auralis-api db:studio"
   }
 }

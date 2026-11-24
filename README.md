@@ -24,6 +24,9 @@ Yêu cầu: Node.js ≥ 22, pnpm 10, [uv](https://docs.astral.sh/uv/) (Python 3.
 cp .env.example .env
 pnpm install
 pnpm db:up                                  # PostgreSQL :5432 + Redis :6379
+cp auralis-api/.env.example auralis-api/.env
+pnpm db:migrate                             # áp migration Prisma
+pnpm db:seed                                # dữ liệu mẫu (chuyên mục, 5 số Radio)
 (cd auralis-audio-ai && uv sync)
 ```
 
@@ -43,3 +46,4 @@ Kiểm thử: `pnpm build`, `pnpm lint`, `pnpm test`, `cd auralis-audio-ai && uv
 ## Tài liệu
 
 - [Lộ trình triển khai](docs/ROADMAP.md)
+- [Thiết kế cơ sở dữ liệu](docs/DATABASE.md)
