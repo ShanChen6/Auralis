@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
+const API_URL = (process.env.API_URL ?? "http://localhost:4000/api").replace(/\/$/, "");
+
 const nextConfig: NextConfig = {
-  /* config options here */
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {
@@ -11,6 +12,10 @@ const nextConfig: NextConfig = {
         as: "*.css",
       },
     },
+  },
+  // Trình duyệt gọi API qua cùng domain với web → cookie đăng nhập là first-party
+  async rewrites() {
+    return [{ source: "/backend/:path*", destination: `${API_URL}/:path*` }];
   },
 };
 

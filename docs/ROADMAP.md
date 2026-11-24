@@ -105,18 +105,18 @@ Yêu cầu kỹ thuật:
 ### GIAI ĐOẠN 4: Cổng Sáng Tạo Cộng Đồng (UGC) & Phòng Nghe Chung Thời Gian Thực (Tuần 8 – Tuần 9)
 *Mục tiêu: Xây dựng không gian sáng tạo nội dung cho cộng đồng (tác giả viết tản văn, cộng tác viên lồng tiếng hoặc tạo giọng đọc AI) và phòng phát thanh nghe chung theo thời gian thực qua Socket.io.*
 
-- [ ] **Task 4.1: Xây dựng Cổng Sáng Tạo (Creator Studio)**
+- [x] **Task 4.1: Xây dựng Cổng Sáng Tạo (Creator Studio)**
   - Thiết kế trình soạn thảo tản văn/truyện ngắn (Rich Text / Markdown Editor) hỗ trợ chia đoạn văn bản rõ ràng để đồng bộ thời gian phát.
   - Xây dựng 2 tùy chọn xuất bản âm thanh cho tác giả:
     1. **Tự thu âm & Tải lên:** Tải trực tiếp file `.mp3`/`.wav` cá nhân lên **Cloudflare R2** qua Presigned URL.
     2. **Tạo Radio AI Tự động:** Chọn giọng đọc (Nữ trầm ấm / Nam sâu lắng / Giọng Studio), chọn nhạc nền (*Piano mưa, Lo-fi ấm áp, Guitar mộc*) và gọi API sang dịch vụ FastAPI.
   - Lưu bài viết mới ở trạng thái `PENDING` (Chờ duyệt) kèm thông báo trạng thái cho tác giả.
 
-- [ ] **Task 4.2: Hệ thống Kiểm duyệt Nội dung (Editorial & Admin Dashboard)**
+- [x] **Task 4.2: Hệ thống Kiểm duyệt Nội dung (Editorial & Admin Dashboard)**
   - Xây dựng màn hình quản trị dành cho Biên tập viên/Admin: Nghe thử bản audio, rà soát nội dung văn bản, chỉnh sửa thẻ tâm trạng (`moodTag`) và bấm duyệt xuất bản (`PENDING -> PUBLISHED`) hoặc từ chối kèm lý do.
   - Xây dựng tính năng ghép cặp cộng đồng: Cho phép một thành viên đăng bài viết chỉ có chữ (`TEXT_ONLY`) để các thành viên có giọng đọc hay đăng ký thu âm lồng tiếng cho bài viết đó.
 
-- [ ] **Task 4.3: Phòng Nghe Chung Trực Tiếp (Live Radio Room với Socket.io)**
+- [x] **Task 4.3: Phòng Nghe Chung Trực Tiếp (Live Radio Room với Socket.io)**
   - Xây dựng `LiveRoomGateway` trong NestJS quản lý các phòng phát thanh trực tiếp theo khung giờ hoặc chủ đề (VD: *"Trạm Đêm Mưa 22h"*, *"Góc Chữa Lành Cuối Tuần"*).
   - **Cơ chế Đồng bộ Tiến độ Nghe (Audio Sync):** Server lưu mốc thời gian bắt đầu phát (`startedAt`) của số Radio hiện tại trong phòng. Khi một thính giả mới bấm tham gia phòng, server tính toán `currentTimestamp = now - startedAt` và gửi về client để trình phát tự động tua đến đúng giây mọi người đang nghe.
   - Tích hợp khung trò chuyện trực tiếp (Live Chat) tối giản theo phong cách kính mờ (Liquid Glass) và hiệu ứng thả biểu tượng cảm xúc (tim, tách trà ấm, ngôi sao) bay nhẹ trên màn hình theo thời gian thực.

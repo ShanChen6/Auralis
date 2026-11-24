@@ -30,6 +30,17 @@ pnpm db:seed                                # dữ liệu mẫu (chuyên mục, 
 (cd auralis-audio-ai && uv sync)
 ```
 
+Để có đủ tính năng Giai đoạn 4 (Radio AI qua hàng đợi), chạy cả 3 dịch vụ cùng PostgreSQL + Redis.
+
+### Tài khoản mẫu (chỉ dùng ở môi trường local, tạo bởi `pnpm db:seed`)
+
+| Vai trò | Tên đăng nhập | Mật khẩu |
+| --- | --- | --- |
+| Quản trị | `admin` | `auralis-admin` |
+| Biên tập viên | `bientap` | `auralis-editor` |
+| Tác giả | `auralis` | `auralis-tacgia` |
+| Cộng tác viên giọng đọc | `giongdoc` | `auralis-giongdoc` |
+
 | Lệnh | Dịch vụ | Địa chỉ |
 | --- | --- | --- |
 | `pnpm dev:web` | Next.js | http://localhost:3000 (cần API chạy để có dữ liệu) |
@@ -48,3 +59,4 @@ Kiểm thử: `pnpm build`, `pnpm lint`, `pnpm test`, `cd auralis-audio-ai && uv
 - [Lộ trình triển khai](docs/ROADMAP.md)
 - [Thiết kế cơ sở dữ liệu](docs/DATABASE.md)
 - [Lưu trữ Cloudflare R2](docs/STORAGE.md)
+- [API & sự kiện Socket.io](docs/API.md)

@@ -9,7 +9,9 @@ pnpm lint
 pnpm build
 ```
 
-Biến môi trường: `API_URL` (mặc định `http://localhost:4000/api`).
+Biến môi trường:
+- `API_URL` (mặc định `http://localhost:4000/api`): dùng cho server components và proxy `/backend/*`.
+- `NEXT_PUBLIC_SOCKET_URL` (mặc định `http://<host>:4000`): địa chỉ Socket.io của API.
 
 ## Cấu trúc
 
@@ -23,6 +25,11 @@ Biến môi trường: `API_URL` (mặc định `http://localhost:4000/api`).
 | `src/store/player.ts` | Zustand: hàng chờ, phát/tạm dừng/tua, hẹn giờ tắt 15/30/60 phút |
 | `src/lib/soundscape.ts` | Web Audio API: tổng hợp tiếng mưa, lửa trại, sóng biển ngay trên trình duyệt |
 | `src/lib/api.ts` | Gọi NestJS với `'use cache'` + `cacheLife("minutes")` |
+| `src/lib/client-api.ts` | Gọi API từ trình duyệt qua proxy `/backend` (cookie first-party) |
+| `src/app/studio/` | Creator Studio: viết bài, chọn giọng AI / tải bản thu / chỉ đăng chữ, theo dõi trạng thái |
+| `src/app/kiem-duyet/` | Bảng kiểm duyệt cho biên tập viên |
+| `src/app/long-tieng/` | Ghép cặp cộng đồng: nhận lồng tiếng bài chỉ có chữ |
+| `src/app/phong-nghe/` | Phòng nghe chung: `use-live-room.ts` đồng bộ tiến độ, chat, thả cảm xúc |
 
 ## Ghi chú
 

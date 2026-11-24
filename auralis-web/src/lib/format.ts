@@ -29,6 +29,7 @@ export const MUSIC_LABELS: Record<string, string> = {
 const VOICE_LABELS: Record<string, string> = {
   "vi-VN-HoaiMyNeural": "Hoài My · Nữ trầm ấm",
   "vi-VN-NamMinhNeural": "Nam Minh · Nam sâu lắng",
+  VoiceStudio: "Giọng Studio",
 };
 
 export function voiceLabel(voiceName: string | null, isAi: boolean): string {
