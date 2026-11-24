@@ -7,7 +7,8 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { AuthGuard, CurrentUser, OptionalAuth } from '../auth/auth.guard.js';
+import { AuthGuard, CurrentUser, Roles } from '../auth/auth.guard.js';
+import { UserRole } from '../generated/prisma/enums.js';
 import type { SessionPayload } from '../auth/auth.types.js';
 import {
   type ClaimInput,
@@ -21,16 +22,19 @@ import {
   type OpenPost,
 } from './narrations.service.js';
 
-/** Ghép cặp cộng đồng: thành viên có giọng đọc hay nhận lồng tiếng bài chỉ có chữ */
+/**
+ * Lồng tiếng cho bài chỉ có chữ. Theo chính sách quyền: chỉ ban biên tập
+ * (biên tập viên, quản trị viên) được tạo audio, nên toàn bộ API này giới hạn cho họ.
+ */
 @Controller('narrations')
 @UseGuards(AuthGuard)
+@Roles(UserRole.EDITOR, UserRole.ADMIN)
 export class NarrationsController {
   constructor(private readonly narrations: NarrationsService) {}
 
   @Get('open')
-  @OptionalAuth()
-  open(@CurrentUser() user?: SessionPayload): Promise<OpenPost[]> {
-    return this.narrations.listOpen(user?.sub);
+  open(@CurrentUser() user: SessionPayload): Promise<OpenPost[]> {
+    return this.narrations.listOpen(user.sub);
   }
 
   @Get('mine')

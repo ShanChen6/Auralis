@@ -14,7 +14,14 @@ Phiên đăng nhập là JWT (7 ngày) trong cookie httpOnly `auralis_session`. 
 | GET | `/auth/me` | Người dùng hiện tại |
 | GET | `/auth/socket-token` | Token 5 phút để kết nối Socket.io |
 
-Vai trò: `LISTENER`, `AUTHOR`, `EDITOR`, `ADMIN`. Các endpoint `/admin/*` chỉ dành cho `EDITOR` và `ADMIN`.
+Vai trò: `LISTENER`, `AUTHOR` (mặc định khi đăng ký), `EDITOR`, `ADMIN`.
+
+| Quyền | Người dùng (`AUTHOR`, `LISTENER`) | Ban biên tập (`EDITOR`, `ADMIN`) |
+| --- | --- | --- |
+| Đăng bài chữ | ✓ tối đa `POST_DAILY_LIMIT` bài/ngày (mặc định 5) và 3 bài/phút | ✓ không giới hạn |
+| Tạo audio: Radio AI, tải bản thu, lồng tiếng | ✗ (403) | ✓ |
+| Xin URL upload `kind: "audio"` | ✗ (403); ảnh bìa vẫn được | ✓ |
+| Kiểm duyệt `/admin/*`, `/narrations/*` | ✗ (403) | ✓ |
 
 ## Bài viết công khai
 
@@ -29,17 +36,18 @@ Vai trò: `LISTENER`, `AUTHOR`, `EDITOR`, `ADMIN`. Các endpoint `/admin/*` ch�
 
 | Method | Đường dẫn | Mô tả |
 | --- | --- | --- |
-| POST | `/storage/presigned-upload` | `{ kind: "audio" \| "cover", contentType, contentLength }`, trả về URL để PUT file lên R2 |
-| POST | `/studio/posts` | Tạo bài ở trạng thái `PENDING` (xem `audio` bên dưới) |
+| POST | `/storage/presigned-upload` | `{ kind: "audio" \| "cover", contentType, contentLength }`, trả về URL để PUT file lên R2 (audio: chỉ ban biên tập) |
+| POST | `/studio/posts` | Tạo bài ở trạng thái `PENDING`. Người dùng thường bỏ trống `audio` (chỉ đăng chữ) |
 | GET | `/studio/posts` | Bài của tôi, kèm `status`, `audioStatus`, `rejectReason` |
-| POST | `/studio/posts/:id/retry-audio` | Tạo lại Radio AI khi lần trước lỗi (`FAILED`) |
+| GET | `/studio/quota` | `{ limit, used, remaining, canCreateAudio }` (ban biên tập: `limit` = `null`) |
+| POST | `/studio/posts/:id/retry-audio` | Tạo lại Radio AI khi lần trước lỗi (`FAILED`), chỉ ban biên tập |
 
-`audio` có 3 dạng:
+`audio` có 3 dạng (2 dạng đầu chỉ dành cho ban biên tập):
 
 ```jsonc
 { "mode": "upload", "audioUrl": "<publicUrl từ presigned-upload>", "duration": 41.2 } // tự thu âm
 { "mode": "ai", "voice": "female_warm" | "male_deep" | "studio", "music": "piano_rain" | "lofi_warm" | "acoustic_night" | null }
-{ "mode": "none" } // chỉ đăng chữ, mời cộng đồng lồng tiếng
+{ "mode": "none" } // chỉ đăng chữ (mặc định), ban biên tập tạo giọng đọc sau
 ```
 
 - **Radio AI:** bài được đưa vào hàng đợi BullMQ (Redis). Worker gọi `auralis-audio-ai` `POST /api/v1/generate-radio`, rồi cập nhật `audioUrl`, `duration`, `timestamps`. `audioStatus` đi theo `PROCESSING → READY`, hoặc `FAILED` sau 2 lần thử.
@@ -55,15 +63,16 @@ Vai trò: `LISTENER`, `AUTHOR`, `EDITOR`, `ADMIN`. Các endpoint `/admin/*` ch�
 | PATCH | `/admin/posts/:id/approve` | `{ moodTag?, isFeatured? }`, chuyển `PENDING → PUBLISHED` |
 | PATCH | `/admin/posts/:id/reject` | `{ reason }`, chuyển sang `REJECTED`; tác giả thấy lý do trong Studio |
 | PATCH | `/admin/posts/:id` | `{ moodTag?, isFeatured? }` |
+| POST | `/admin/posts/:id/audio` | Tạo hoặc thay giọng đọc: `{ mode: "ai", voice, music }` hoặc `{ mode: "upload", audioUrl, duration }` |
 | GET | `/admin/narrations?status=SUBMITTED` | Bản lồng tiếng chờ duyệt |
 | PATCH | `/admin/narrations/:id/approve` | Gắn audio và CTV vào bài; các bản khác của bài đó bị từ chối |
 | PATCH | `/admin/narrations/:id/reject` | `{ reason }` |
 
-## Lồng tiếng cộng đồng
+## Lồng tiếng (chỉ ban biên tập)
 
 | Method | Đường dẫn | Mô tả |
 | --- | --- | --- |
-| GET | `/narrations/open` | Bài đã xuất bản nhưng chỉ có chữ (không cần đăng nhập) |
+| GET | `/narrations/open` | Bài đã xuất bản nhưng chỉ có chữ |
 | GET | `/narrations/mine` | Lượt nhận lồng tiếng của tôi |
 | POST | `/narrations` | `{ postId }`, nhận lồng tiếng |
 | POST | `/narrations/:id/submit` | `{ audioUrl, duration, note? }`, nộp bản thu |

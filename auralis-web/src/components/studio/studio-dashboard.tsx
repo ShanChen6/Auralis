@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/input";
 import { api } from "@/lib/client-api";
+import { isModerator, useSession } from "@/store/session";
 import { MOODS, formatDate, formatTime } from "@/lib/format";
 import { NARRATION_STATUS, type NarrationStatus, POST_STATUS, type StudioPost } from "@/lib/studio";
 
@@ -20,20 +21,25 @@ interface MyNarration {
 }
 
 export function StudioDashboard({ justSubmitted }: { justSubmitted: boolean }) {
+  const staff = useSession((s) => isModerator(s.user));
   const [posts, setPosts] = useState<StudioPost[] | null>(null);
   const [narrations, setNarrations] = useState<MyNarration[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(
     () =>
-      Promise.all([api<StudioPost[]>("/studio/posts"), api<MyNarration[]>("/narrations/mine")]).then(
+      Promise.all([
+        api<StudioPost[]>("/studio/posts"),
+        // Lồng tiếng chỉ dành cho ban biên tập
+        staff ? api<MyNarration[]>("/narrations/mine").catch(() => []) : Promise.resolve([]),
+      ]).then(
         ([p, n]) => {
           setPosts(p);
           setNarrations(n);
         },
         (err: Error) => setError(err.message),
       ),
-    [],
+    [staff],
   );
 
   useEffect(() => {
@@ -60,7 +66,9 @@ export function StudioDashboard({ justSubmitted }: { justSubmitted: boolean }) {
   return (
     <div className="space-y-10">
       {justSubmitted && (
-        <Alert tone="success">Đã gửi bài! Biên tập viên sẽ xem và phản hồi sớm. Trạng thái được cập nhật ngay tại đây.</Alert>
+        <Alert tone="success">
+          Đã gửi bài! Ban biên tập sẽ duyệt và tạo giọng đọc cho bài của bạn. Trạng thái được cập nhật ngay tại đây.
+        </Alert>
       )}
       {error && <Alert>{error}</Alert>}
 
@@ -106,7 +114,7 @@ export function StudioDashboard({ justSubmitted }: { justSubmitted: boolean }) {
                     )}
                   </div>
                   <div className="flex gap-2">
-                    {post.audioStatus === "FAILED" && (
+                    {post.audioStatus === "FAILED" && staff && (
                       <Button size="sm" variant="outline" onClick={() => void retry(post.id)}>
                         <RotateCw className="size-3.5" />
                         Tạo lại Radio
@@ -168,6 +176,6 @@ function AudioBadge({ post }: { post: StudioPost }) {
         </Badge>
       );
     default:
-      return <Badge>{post.narrator ? `Giọng: ${post.narrator.displayName}` : "Chờ lồng tiếng"}</Badge>;
+      return <Badge>{post.narrator ? `Giọng: ${post.narrator.displayName}` : "Chờ ban biên tập tạo giọng đọc"}</Badge>;
   }
 }

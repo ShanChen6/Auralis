@@ -5,6 +5,7 @@ import {
   Param,
   ParseUUIDPipe,
   Patch,
+  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -25,6 +26,10 @@ import {
   rejectSchema,
   updatePostSchema,
 } from './moderation.schemas.js';
+import {
+  type StaffAudioInput,
+  staffAudioSchema,
+} from '../studio/studio.schemas.js';
 import {
   ModerationService,
   type ReviewNarration,
@@ -74,6 +79,15 @@ export class ModerationController {
     @Body({ schema: updatePostSchema }) body: UpdatePostInput,
   ): Promise<ReviewPost> {
     return this.moderation.updatePost(id, body);
+  }
+
+  /** Tạo / thay giọng đọc cho bài: Radio AI hoặc bản thu tải lên */
+  @Post('posts/:id/audio')
+  attachAudio(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body({ schema: staffAudioSchema }) body: StaffAudioInput,
+  ): Promise<ReviewPost> {
+    return this.moderation.attachAudio(id, body);
   }
 
   @Get('narrations')

@@ -38,8 +38,8 @@ pnpm db:seed                                # dữ liệu mẫu (chuyên mục, 
 | --- | --- | --- |
 | Quản trị | `admin` | `auralis-admin` |
 | Biên tập viên | `bientap` | `auralis-editor` |
-| Tác giả | `auralis` | `auralis-tacgia` |
-| Cộng tác viên giọng đọc | `giongdoc` | `auralis-giongdoc` |
+| Người dùng thường (chỉ đăng bài chữ) | `auralis` | `auralis-tacgia` |
+| Người dùng thường (chỉ đăng bài chữ) | `giongdoc` | `auralis-giongdoc` |
 
 | Lệnh | Dịch vụ | Địa chỉ |
 | --- | --- | --- |

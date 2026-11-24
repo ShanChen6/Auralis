@@ -1,12 +1,17 @@
 import { HttpException, HttpStatus, Inject, Injectable } from '@nestjs/common';
 import type { Redis } from 'ioredis';
-import { UserRole } from '../generated/prisma/enums.js';
+import { isStaff } from '../auth/roles.js';
+import type { UserRole } from '../generated/prisma/enums.js';
 import { REDIS } from '../redis/redis.module.js';
 
+export type QuotaKind = 'post';
+
 export interface QuotaStatus {
-  limit: number;
+  kind: QuotaKind;
+  /** null = không giới hạn (ban biên tập) */
+  limit: number | null;
   used: number;
-  remaining: number;
+  remaining: number | null;
   /** Ngày tính quota theo giờ Việt Nam (YYYY-MM-DD) */
   day: string;
 }
@@ -18,59 +23,76 @@ export function vietnamDay(now = new Date()): string {
   }).format(now);
 }
 
-const EXEMPT_ROLES: UserRole[] = [UserRole.ADMIN, UserRole.EDITOR];
+const MESSAGES: Record<QuotaKind, (limit: number) => string> = {
+  post: (limit) =>
+    `Bạn đã đăng ${limit} bài hôm nay – mức tối đa mỗi ngày. Hãy quay lại vào ngày mai nhé!`,
+};
 
 /**
- * Giới hạn số số Radio AI mỗi người được tạo trong ngày (mặc định 3) để chống spam
- * làm quá tải dịch vụ TTS. Redis lỗi thì dùng bộ đếm trong bộ nhớ.
+ * Giới hạn số lần thực hiện một thao tác mỗi ngày cho mỗi người (chống spam).
+ * Ban biên tập (admin, biên tập viên) được miễn. Redis lỗi thì dùng bộ đếm trong bộ nhớ.
  */
 @Injectable()
-export class AiQuotaService {
-  readonly limit = Number(process.env.AI_DAILY_LIMIT ?? 3);
+export class DailyQuotaService {
+  private readonly limits: Record<QuotaKind, number> = {
+    post: Number(process.env.POST_DAILY_LIMIT ?? 5),
+  };
   private readonly memory = new Map<string, number>();
 
   constructor(@Inject(REDIS) private readonly redis: Redis | null) {}
 
-  private key(userId: string, day: string) {
-    return `quota:ai:${userId}:${day}`;
+  limit(kind: QuotaKind): number {
+    return this.limits[kind];
+  }
+
+  private key(kind: QuotaKind, userId: string, day: string) {
+    return `quota:${kind}:${userId}:${day}`;
   }
 
   async status(
+    kind: QuotaKind,
     userId: string,
     role: UserRole,
     now = new Date(),
   ): Promise<QuotaStatus> {
     const day = vietnamDay(now);
-    const limit = EXEMPT_ROLES.includes(role)
-      ? Number.POSITIVE_INFINITY
-      : this.limit;
-    const used = await this.read(this.key(userId, day));
-    return { limit, used, remaining: Math.max(0, limit - used), day };
+    const used = await this.read(this.key(kind, userId, day));
+    if (isStaff(role)) return { kind, limit: null, used, remaining: null, day };
+    const limit = this.limits[kind];
+    return { kind, limit, used, remaining: Math.max(0, limit - used), day };
   }
 
   /** Giữ một lượt; ném 429 nếu đã hết lượt trong ngày */
   async consume(
+    kind: QuotaKind,
     userId: string,
     role: UserRole,
     now = new Date(),
   ): Promise<QuotaStatus> {
+    if (isStaff(role)) return this.status(kind, userId, role, now);
     const day = vietnamDay(now);
-    if (EXEMPT_ROLES.includes(role)) return this.status(userId, role, now);
-    const key = this.key(userId, day);
+    const key = this.key(kind, userId, day);
+    const limit = this.limits[kind];
     const used = await this.increment(key, 1);
-    if (used > this.limit) {
+    if (used > limit) {
       await this.increment(key, -1);
       throw new HttpException(
-        `Bạn đã dùng hết ${this.limit} lượt tạo Radio AI hôm nay. Hãy quay lại vào ngày mai, hoặc tự thu âm nhé!`,
+        MESSAGES[kind](limit),
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
-    return { limit: this.limit, used, remaining: this.limit - used, day };
+    return { kind, limit, used, remaining: limit - used, day };
   }
 
-  /** Hoàn lại lượt khi tạo bài thất bại trước khi đưa vào hàng đợi */
-  async refund(userId: string, now = new Date()): Promise<void> {
-    await this.increment(this.key(userId, vietnamDay(now)), -1);
+  /** Hoàn lại lượt khi thao tác thất bại */
+  async refund(
+    kind: QuotaKind,
+    userId: string,
+    role: UserRole,
+    now = new Date(),
+  ): Promise<void> {
+    if (isStaff(role)) return;
+    await this.increment(this.key(kind, userId, vietnamDay(now)), -1);
   }
 
   private async read(key: string): Promise<number> {

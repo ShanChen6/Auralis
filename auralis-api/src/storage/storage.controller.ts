@@ -15,7 +15,9 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { AuthGuard } from '../auth/auth.guard.js';
+import { AuthGuard, CurrentUser } from '../auth/auth.guard.js';
+import type { SessionPayload } from '../auth/auth.types.js';
+import { isStaff } from '../auth/roles.js';
 import { LOCAL_MEDIA, type LocalMediaStore } from './local-media.store.js';
 import { isUploadKind } from './storage.constants.js';
 import { StorageService, type PresignedUpload } from './storage.service.js';
@@ -51,10 +53,17 @@ export class StorageController {
   @UseGuards(AuthGuard)
   createPresignedUpload(
     @Body() body: PresignedUploadBody,
+    @CurrentUser() user?: SessionPayload,
   ): Promise<PresignedUpload> {
     const { kind, contentType, contentLength } = body ?? {};
     if (!isUploadKind(kind)) {
       throw new BadRequestException('kind phải là "cover" hoặc "audio"');
+    }
+    // Chỉ ban biên tập được tải audio lên; người dùng chỉ đăng bài chữ
+    if (kind === 'audio' && !isStaff(user?.role)) {
+      throw new ForbiddenException(
+        'Chỉ biên tập viên và quản trị viên được tải âm thanh lên',
+      );
     }
     if (typeof contentType !== 'string' || contentType.length === 0) {
       throw new BadRequestException('contentType là bắt buộc');

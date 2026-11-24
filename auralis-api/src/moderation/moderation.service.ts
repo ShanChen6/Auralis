@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -12,7 +13,11 @@ import {
 } from '../generated/prisma/enums.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { audioFields } from '../radio-queue/audio-plan.js';
+import { RadioQueueService } from '../radio-queue/radio-queue.service.js';
 import { ContentEvents } from '../security/web-revalidator.service.js';
+import { StorageService } from '../storage/storage.service.js';
+import type { StaffAudioInput } from '../studio/studio.schemas.js';
 import type {
   ApprovePostInput,
   RejectInput,
@@ -74,6 +79,8 @@ export class ModerationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: ContentEvents,
+    private readonly storage: StorageService,
+    private readonly radioQueue: RadioQueueService,
   ) {}
 
   async stats(): Promise<{
@@ -260,6 +267,62 @@ export class ModerationService {
       data: { status: NarrationStatus.REJECTED, rejectReason: input.reason },
       select: narrationSelect,
     });
+  }
+
+  /**
+   * Ban biên tập tạo / thay giọng đọc cho bài viết (VD: bài chữ của người dùng):
+   * Radio AI (đưa vào hàng đợi) hoặc bản thu tải lên.
+   */
+  async attachAudio(id: string, audio: StaffAudioInput): Promise<ReviewPost> {
+    const post = await this.prisma.post.findUnique({
+      where: { id },
+      select: { audioStatus: true, content: { select: { content: true } } },
+    });
+    if (!post) throw new NotFoundException('Không tìm thấy bài viết');
+    if (post.audioStatus === AudioStatus.PROCESSING) {
+      throw new ConflictException('Radio AI của bài này đang được tạo');
+    }
+    if (audio.mode === 'upload' && !this.storage.ownsUrl(audio.audioUrl)) {
+      throw new BadRequestException(
+        'audioUrl phải là file đã tải lên kho lưu trữ của Auralis',
+      );
+    }
+
+    const fields = audioFields(
+      audio,
+      splitParagraphs(post.content?.content ?? ''),
+    );
+    const updated = await this.prisma.post.update({
+      where: { id },
+      data: {
+        ...fields.post,
+        // Giọng đọc mới do ban biên tập tạo → bỏ gắn CTV cũ (nếu có)
+        narrator: { disconnect: true },
+        ...(fields.timestamps
+          ? { content: { update: { timestamps: fields.timestamps } } }
+          : {}),
+      },
+      select: reviewSelect,
+    });
+
+    if (audio.mode === 'ai') {
+      try {
+        await this.radioQueue.enqueue({
+          postId: id,
+          voice: audio.voice,
+          music: audio.music,
+        });
+      } catch (error) {
+        await this.prisma.post.update({
+          where: { id },
+          data: { audioStatus: AudioStatus.FAILED },
+        });
+        throw error;
+      }
+    } else if (updated.status === PostStatus.PUBLISHED) {
+      await this.events.postsChanged([updated.slug]);
+    }
+    return updated;
   }
 
   private async findPost(id: string) {

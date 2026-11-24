@@ -1,12 +1,13 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { isStaff } from '../auth/roles.js';
 import {
   countWords,
-  estimateTimestamps,
   randomSuffix,
   slugify,
   splitParagraphs,
@@ -15,24 +16,24 @@ import {
   AudioSource,
   AudioStatus,
   PostStatus,
+  type UserRole,
 } from '../generated/prisma/enums.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { type AudioFields, audioFields } from '../radio-queue/audio-plan.js';
 import {
-  EDGE_VOICE_NAMES,
   type RadioJobData,
   voiceFromName,
 } from '../radio-queue/radio-queue.constants.js';
 import { RadioQueueService } from '../radio-queue/radio-queue.service.js';
 import {
-  AiQuotaService,
+  DailyQuotaService,
   type QuotaStatus,
-} from '../security/ai-quota.service.js';
+} from '../security/daily-quota.service.js';
 import { StorageService } from '../storage/storage.service.js';
-import type { UserRole } from '../generated/prisma/enums.js';
 import type { CreatePostInput } from './studio.schemas.js';
 
-const studioSelect = {
+export const studioSelect = {
   id: true,
   slug: true,
   title: true,
@@ -55,24 +56,44 @@ const studioSelect = {
 
 export type StudioPost = Prisma.PostGetPayload<{ select: typeof studioSelect }>;
 
+export interface StudioQuota extends QuotaStatus {
+  /** Chỉ ban biên tập được tạo audio */
+  canCreateAudio: boolean;
+}
+
+export const AUDIO_FORBIDDEN_MESSAGE =
+  'Chỉ biên tập viên và quản trị viên được tạo giọng đọc. Bạn hãy đăng bài chữ, ban biên tập sẽ thực hiện phần âm thanh.';
+
 @Injectable()
 export class StudioService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly radioQueue: RadioQueueService,
-    private readonly quota: AiQuotaService,
+    private readonly quota: DailyQuotaService,
   ) {}
 
-  quotaStatus(userId: string, role: UserRole): Promise<QuotaStatus> {
-    return this.quota.status(userId, role);
+  async quotaStatus(userId: string, role: UserRole): Promise<StudioQuota> {
+    return {
+      ...(await this.quota.status('post', userId, role)),
+      canCreateAudio: isStaff(role),
+    };
   }
 
+  /**
+   * Tạo bài mới ở trạng thái PENDING.
+   * Người dùng thường: chỉ đăng chữ, tối đa POST_DAILY_LIMIT bài/ngày.
+   * Ban biên tập: được kèm audio (Radio AI / bản thu), không giới hạn.
+   */
   async createPost(
     authorId: string,
     input: CreatePostInput,
-    role: UserRole = 'AUTHOR',
+    role: UserRole,
   ): Promise<StudioPost> {
+    const { audio } = input;
+    if (audio.mode !== 'none' && !isStaff(role)) {
+      throw new ForbiddenException(AUDIO_FORBIDDEN_MESSAGE);
+    }
     if (input.categorySlug) {
       const category = await this.prisma.category.findUnique({
         where: { slug: input.categorySlug },
@@ -80,64 +101,30 @@ export class StudioService {
       });
       if (!category) throw new BadRequestException('Chuyên mục không tồn tại');
     }
-    if (
-      input.audio.mode === 'upload' &&
-      !this.storage.ownsUrl(input.audio.audioUrl)
-    ) {
+    if (audio.mode === 'upload' && !this.storage.ownsUrl(audio.audioUrl)) {
       throw new BadRequestException(
         'audioUrl phải là file đã tải lên kho lưu trữ của Auralis',
       );
     }
 
-    // Giữ lượt tạo Radio AI trong ngày trước khi ghi DB (hoàn lại nếu tạo bài lỗi)
-    if (input.audio.mode === 'ai') await this.quota.consume(authorId, role);
-
-    const paragraphs = splitParagraphs(input.content);
-    const audio = this.audioFields(input, paragraphs);
-    const post = await this.createRecord(authorId, input, audio).catch(
+    // Giữ một lượt đăng bài trong ngày (hoàn lại nếu ghi DB lỗi)
+    await this.quota.consume('post', authorId, role);
+    const fields = audioFields(audio, splitParagraphs(input.content));
+    const post = await this.createRecord(authorId, input, fields).catch(
       async (error: unknown) => {
-        if (input.audio.mode === 'ai') await this.quota.refund(authorId);
+        await this.quota.refund('post', authorId, role);
         throw error;
       },
     );
 
-    if (input.audio.mode === 'ai') {
+    if (audio.mode === 'ai') {
       await this.enqueueOrFail(post.id, {
         postId: post.id,
-        voice: input.audio.voice,
-        music: input.audio.music,
+        voice: audio.voice,
+        music: audio.music,
       });
     }
     return post;
-  }
-
-  private async createRecord(
-    authorId: string,
-    input: CreatePostInput,
-    audio: ReturnType<StudioService['audioFields']>,
-  ): Promise<StudioPost> {
-    return this.prisma.post.create({
-      data: {
-        title: input.title,
-        slug: await this.uniqueSlug(input.title),
-        summary: input.summary || null,
-        moodTag: input.moodTag,
-        status: PostStatus.PENDING,
-        ...audio.post,
-        author: { connect: { id: authorId } },
-        ...(input.categorySlug
-          ? { category: { connect: { slug: input.categorySlug } } }
-          : {}),
-        content: {
-          create: {
-            content: input.content,
-            wordCount: countWords(input.content),
-            ...(audio.timestamps ? { timestamps: audio.timestamps } : {}),
-          },
-        },
-      },
-      select: studioSelect,
-    });
   }
 
   listMine(authorId: string): Promise<StudioPost[]> {
@@ -149,10 +136,10 @@ export class StudioService {
     });
   }
 
-  /** Tạo lại Radio AI khi lần trước thất bại */
-  async retryAudio(authorId: string, postId: string): Promise<StudioPost> {
-    const post = await this.prisma.post.findFirst({
-      where: { id: postId, authorId },
+  /** Tạo lại Radio AI khi lần trước thất bại (chỉ ban biên tập – kiểm tra ở controller) */
+  async retryAudio(postId: string): Promise<StudioPost> {
+    const post = await this.prisma.post.findUnique({
+      where: { id: postId },
       select: {
         id: true,
         audioStatus: true,
@@ -183,44 +170,33 @@ export class StudioService {
     return updated;
   }
 
-  private audioFields(input: CreatePostInput, paragraphs: string[]) {
-    const { audio } = input;
-    switch (audio.mode) {
-      case 'upload':
-        return {
-          post: {
-            audioUrl: audio.audioUrl,
-            duration: Math.round(audio.duration),
-            audioSource: AudioSource.UPLOAD,
-            audioStatus: AudioStatus.READY,
+  private async createRecord(
+    authorId: string,
+    input: CreatePostInput,
+    audio: AudioFields,
+  ): Promise<StudioPost> {
+    return this.prisma.post.create({
+      data: {
+        title: input.title,
+        slug: await this.uniqueSlug(input.title),
+        summary: input.summary || null,
+        moodTag: input.moodTag,
+        status: PostStatus.PENDING,
+        ...audio.post,
+        author: { connect: { id: authorId } },
+        ...(input.categorySlug
+          ? { category: { connect: { slug: input.categorySlug } } }
+          : {}),
+        content: {
+          create: {
+            content: input.content,
+            wordCount: countWords(input.content),
+            ...(audio.timestamps ? { timestamps: audio.timestamps } : {}),
           },
-          timestamps: estimateTimestamps(paragraphs, audio.duration),
-        };
-      case 'ai':
-        return {
-          post: {
-            audioSource:
-              audio.voice === 'studio'
-                ? AudioSource.AI_VOICESTUDIO
-                : AudioSource.AI_EDGE,
-            audioStatus: AudioStatus.PROCESSING,
-            voiceName:
-              audio.voice === 'studio'
-                ? 'VoiceStudio'
-                : EDGE_VOICE_NAMES[audio.voice],
-            backgroundMusic: audio.music,
-          },
-          timestamps: null,
-        };
-      case 'none':
-        return {
-          post: {
-            audioSource: AudioSource.NONE,
-            audioStatus: AudioStatus.TEXT_ONLY,
-          },
-          timestamps: null,
-        };
-    }
+        },
+      },
+      select: studioSelect,
+    });
   }
 
   private async enqueueOrFail(

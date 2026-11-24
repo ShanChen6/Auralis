@@ -176,7 +176,7 @@ function OpenPostCard({
       <div className="mt-5 flex flex-wrap gap-2">
         {!loggedIn ? (
           <Button asChild variant="outline">
-            <Link href="/dang-nhap?next=/long-tieng">Đăng nhập để nhận lồng tiếng</Link>
+            <Link href="/dang-nhap?next=/long-tieng">Đăng nhập</Link>
           </Button>
         ) : !status || status === "WITHDRAWN" ? (
           <Button disabled={busy} onClick={() => void run(() => api("/narrations", { method: "POST", json: { postId: post.id } }))}>

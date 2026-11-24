@@ -5,7 +5,6 @@ import { UserMenu } from "./user-menu";
 
 const NAV = [
   { href: "/phong-nghe", label: "Phòng nghe" },
-  { href: "/long-tieng", label: "Lồng tiếng" },
   { href: "/studio/viet-bai", label: "Viết bài" },
 ];
 

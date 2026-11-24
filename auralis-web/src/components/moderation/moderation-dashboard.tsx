@@ -1,7 +1,13 @@
 "use client";
 
-import { Check, ChevronDown, Loader2, Star, X } from "lucide-react";
+import { Check, ChevronDown, Loader2, Mic, Star, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import {
+  AudioChoice,
+  type AudioChoiceValue,
+  DEFAULT_AUDIO_CHOICE,
+  audioPayload,
+} from "@/components/studio/audio-choice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Alert, Select, Textarea } from "@/components/ui/input";
@@ -73,6 +79,14 @@ export function ModerationDashboard() {
     load();
   }, [load]);
 
+  // Đang tạo Radio AI → tự cập nhật danh sách cho tới khi xong
+  const processing = posts?.some((p) => p.audioStatus === "PROCESSING");
+  useEffect(() => {
+    if (!processing) return;
+    const id = setInterval(load, 4000);
+    return () => clearInterval(id);
+  }, [processing, load]);
+
   function selectTab(next: Tab) {
     if (next === tab) return;
     setPosts(null);
@@ -81,9 +95,9 @@ export function ModerationDashboard() {
     setTab(next);
   }
 
-  async function act(path: string, body: unknown, success: string) {
+  async function act(path: string, body: unknown, success: string, method: "PATCH" | "POST" = "PATCH") {
     try {
-      await api(path, { method: "PATCH", json: body });
+      await api(path, { method, json: body });
       await load();
       setMessage({ tone: "success", text: success });
     } catch (err) {
@@ -150,6 +164,14 @@ export function ModerationDashboard() {
               onApprove={(input) => act(`/admin/posts/${p.id}/approve`, input, `Đã xuất bản "${p.title}"`)}
               onReject={(reason) => act(`/admin/posts/${p.id}/reject`, { reason }, `Đã từ chối "${p.title}"`)}
               onUpdate={(input) => act(`/admin/posts/${p.id}`, input, "Đã cập nhật")}
+              onAttachAudio={(audio) =>
+                act(
+                  `/admin/posts/${p.id}/audio`,
+                  audio,
+                  audio.mode === "ai" ? `Đang tạo Radio AI cho "${p.title}"…` : `Đã gắn bản thu cho "${p.title}"`,
+                  "POST",
+                )
+              }
             />
           ))
         )}
@@ -214,11 +236,13 @@ function PostReview({
   onApprove,
   onReject,
   onUpdate,
+  onAttachAudio,
 }: {
   post: ReviewPost;
   onApprove: (input: { moodTag: MoodTag; isFeatured: boolean }) => Promise<void>;
   onReject: (reason: string) => Promise<void>;
   onUpdate: (input: { moodTag?: MoodTag; isFeatured?: boolean }) => Promise<void>;
+  onAttachAudio: (audio: NonNullable<ReturnType<typeof audioPayload>>) => Promise<void>;
 }) {
   const [mood, setMood] = useState<MoodTag>(post.moodTag);
   const [featured, setFeatured] = useState(post.isFeatured);
@@ -257,10 +281,14 @@ function PostReview({
               ? "Radio AI đang được tạo…"
               : post.audioStatus === "FAILED"
                 ? "Tạo Radio AI lỗi – tác giả có thể tạo lại."
-                : "Bài chỉ có chữ – sau khi xuất bản sẽ mở cho cộng đồng lồng tiếng."}
+                : "Bài chỉ có chữ – hãy tạo giọng đọc bên dưới trước hoặc sau khi xuất bản."}
           </p>
         )}
       </div>
+
+      {post.audioStatus !== "PROCESSING" && post.status !== "REJECTED" && (
+        <AudioCreator hasAudio={Boolean(post.audioUrl)} onSubmit={onAttachAudio} />
+      )}
 
       {post.content && <ContentPreview content={post.content.content} />}
       {post.rejectReason && <p className="mt-3 text-sm text-red-300">Lý do từ chối: {post.rejectReason}</p>}
@@ -344,5 +372,57 @@ function NarrationReview({
         </Button>
       </div>
     </article>
+  );
+}
+
+/** Ban biên tập tạo (hoặc thay) giọng đọc cho bài: Radio AI hoặc tải bản thu */
+function AudioCreator({
+  hasAudio,
+  onSubmit,
+}: {
+  hasAudio: boolean;
+  onSubmit: (audio: NonNullable<ReturnType<typeof audioPayload>>) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(!hasAudio);
+  const [value, setValue] = useState<AudioChoiceValue>(DEFAULT_AUDIO_CHOICE);
+  const [busy, setBusy] = useState(false);
+  const payload = audioPayload(value);
+
+  if (!open) {
+    return (
+      <Button variant="ghost" size="sm" className="mt-3" onClick={() => setOpen(true)}>
+        <Mic className="size-3.5" />
+        Thay giọng đọc
+      </Button>
+    );
+  }
+  return (
+    <section className="mt-4 rounded-2xl border border-secondary/25 bg-secondary/5 p-4" aria-label="Tạo giọng đọc">
+      <p className="mb-3 flex items-center gap-2 text-sm font-medium text-secondary">
+        <Mic className="size-4" />
+        {hasAudio ? "Thay giọng đọc" : "Tạo giọng đọc cho bài này"}
+      </p>
+      <AudioChoice value={value} onChange={setValue} allowNone={false} />
+      <div className="mt-4 flex gap-2">
+        <Button
+          size="sm"
+          disabled={busy || !payload}
+          onClick={async () => {
+            if (!payload) return;
+            setBusy(true);
+            await onSubmit(payload);
+            setBusy(false);
+          }}
+        >
+          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+          {value.mode === "ai" ? "Tạo Radio AI" : "Gắn bản thu"}
+        </Button>
+        {hasAudio && (
+          <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
+            Hủy
+          </Button>
+        )}
+      </div>
+    </section>
   );
 }

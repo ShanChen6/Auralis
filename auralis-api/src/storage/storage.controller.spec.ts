@@ -17,13 +17,16 @@ import { AuthGuard } from '../auth/auth.guard.js';
 import { LOCAL_MEDIA } from './local-media.store.js';
 import { StorageModule } from './storage.module.js';
 
-/** Guard giả: có header x-test-user thì coi như đã đăng nhập */
+/** Guard giả: có header x-test-user (= vai trò) thì coi như đã đăng nhập */
 const fakeAuthGuard = {
   canActivate(context: ExecutionContext) {
     const req = context
       .switchToHttp()
-      .getRequest<{ headers: Record<string, string> }>();
-    if (!req.headers['x-test-user']) throw new UnauthorizedException();
+      .getRequest<{ headers: Record<string, string>; user?: object }>();
+    // Giá trị header = vai trò người dùng (VD: EDITOR, AUTHOR)
+    const role = req.headers['x-test-user'];
+    if (!role) throw new UnauthorizedException();
+    req.user = { sub: 'u1', role, username: 'u' };
     return true;
   },
 };
@@ -78,7 +81,7 @@ describe('StorageController', () => {
     it('POST /api/storage/presigned-upload trả về URL đã ký', async () => {
       const res = await request(app.getHttpServer())
         .post('/api/storage/presigned-upload')
-        .set('x-test-user', 'u1')
+        .set('x-test-user', 'EDITOR')
         .send({ kind: 'audio', contentType: 'audio/mpeg', contentLength: 1024 })
         .expect(201);
 
@@ -111,7 +114,7 @@ describe('StorageController', () => {
     ])('từ chối body %j với mã %i', async (body, status) => {
       await request(app.getHttpServer())
         .post('/api/storage/presigned-upload')
-        .set('x-test-user', 'u1')
+        .set('x-test-user', 'EDITOR')
         .send(body)
         .expect(status);
     });
@@ -121,7 +124,7 @@ describe('StorageController', () => {
     const app = await createApp(false);
     await request(app.getHttpServer())
       .post('/api/storage/presigned-upload')
-      .set('x-test-user', 'u1')
+      .set('x-test-user', 'EDITOR')
       .send({ kind: 'cover', contentType: 'image/png', contentLength: 1 })
       .expect(503);
     await app.close();
@@ -133,6 +136,21 @@ describe('StorageController', () => {
       .post('/api/storage/presigned-upload')
       .send({ kind: 'cover', contentType: 'image/png', contentLength: 1 })
       .expect(401);
+    await app.close();
+  });
+
+  it('tác giả không được tải audio (403) nhưng vẫn tải được ảnh bìa', async () => {
+    const app = await createApp(true);
+    await request(app.getHttpServer())
+      .post('/api/storage/presigned-upload')
+      .set('x-test-user', 'AUTHOR')
+      .send({ kind: 'audio', contentType: 'audio/mpeg', contentLength: 1024 })
+      .expect(403);
+    await request(app.getHttpServer())
+      .post('/api/storage/presigned-upload')
+      .set('x-test-user', 'AUTHOR')
+      .send({ kind: 'cover', contentType: 'image/png', contentLength: 1024 })
+      .expect(201);
     await app.close();
   });
 });

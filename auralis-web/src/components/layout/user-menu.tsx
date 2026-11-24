@@ -29,8 +29,12 @@ export function UserMenu() {
 
   const links = [
     { href: "/studio", label: "Studio của tôi", icon: PenLine },
-    { href: "/long-tieng", label: "Lồng tiếng cộng đồng", icon: Mic },
-    ...(isModerator(user) ? [{ href: "/kiem-duyet", label: "Kiểm duyệt", icon: ShieldCheck }] : []),
+    ...(isModerator(user)
+      ? [
+          { href: "/kiem-duyet", label: "Kiểm duyệt", icon: ShieldCheck },
+          { href: "/long-tieng", label: "Lồng tiếng", icon: Mic },
+        ]
+      : []),
   ];
 
   return (

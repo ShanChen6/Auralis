@@ -56,7 +56,7 @@
 | `AUDIO_AI_TIMEOUT_MS` | `900000` | |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_URL` | | ✓ |
 | `STORAGE_LOCAL_FALLBACK` | `false` | đặt `false` ở production |
-| `AI_DAILY_LIMIT` | `3` | |
+| `POST_DAILY_LIMIT` | `5` | Số bài người dùng thường được đăng mỗi ngày |
 | `RATE_LIMIT_PER_MINUTE` | `120` | |
 | `TRUST_PROXY` | `2` | Số proxy phía trước: Render (1) + Vercel rewrite (1) |
 | `RADIO_MAX_WORDS` | `3000` | |
@@ -81,7 +81,7 @@
 ## Bảo mật
 
 - Rate limit (Redis, dùng chung nhiều instance): mặc định 120 request/phút cho mỗi người dùng hoặc IP; đăng nhập và đăng ký tối đa 10 lần/phút.
-- Mỗi người được tạo tối đa **3 số Radio AI mỗi ngày** (reset 0h giờ Việt Nam; biên tập viên và quản trị được miễn). Kịch bản tối đa 3.000 từ.
+- **Phân quyền tạo âm thanh:** chỉ biên tập viên và quản trị viên được tạo audio (Radio AI, tải bản thu, lồng tiếng). Người dùng thường chỉ đăng bài chữ, tối đa `POST_DAILY_LIMIT` bài/ngày (mặc định 5, reset 0h giờ Việt Nam) và 3 bài/phút. Kịch bản tối đa 3.000 từ.
 - Upload: ảnh bìa ≤ 5MB, MP3 ≤ 50MB, kiểm tra MIME; `Content-Type` và `Content-Length` được ký vào Presigned URL.
 - Header bảo mật bằng `helmet`, cookie phiên `httpOnly` + `SameSite=Lax` + `Secure` ở production. Dịch vụ audio-ai yêu cầu `X-API-Key`.
 
