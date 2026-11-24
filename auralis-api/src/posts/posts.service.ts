@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { MoodTag, PostStatus } from '../generated/prisma/enums.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { splitParagraphs } from '../common/text.js';
 import type {
   PostCard,
   PostDetail,
@@ -36,14 +37,7 @@ export interface ListPostsQuery {
   cursor?: string;
 }
 
-/** Tách đoạn giống dịch vụ TTS: các đoạn cách nhau bằng dòng trống. */
-export function splitParagraphs(content: string): string[] {
-  return content
-    .replace(/\r\n/g, '\n')
-    .split(/\n\s*\n/)
-    .map((p) => p.trim())
-    .filter(Boolean);
-}
+export { splitParagraphs } from '../common/text.js';
 
 export function isMoodTag(value: unknown): value is MoodTag {
   return typeof value === 'string' && value in MoodTag;

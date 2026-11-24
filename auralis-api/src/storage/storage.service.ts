@@ -20,6 +20,9 @@ import {
   type StorageConfig,
 } from './storage.config.js';
 import { UPLOAD_RULES, type UploadKind } from './storage.constants.js';
+import { LOCAL_MEDIA, type LocalMediaStore } from './local-media.store.js';
+
+const LOCAL_PRESIGN_EXPIRES_IN = 600;
 
 export interface PresignedUploadRequest {
   kind: UploadKind;
@@ -59,23 +62,57 @@ export class StorageService {
     @Optional()
     @Inject(STORAGE_CONFIG)
     private readonly config: StorageConfig | null,
+    @Optional()
+    @Inject(LOCAL_MEDIA)
+    private readonly local: LocalMediaStore | null = null,
   ) {}
 
   get isConfigured(): boolean {
     return Boolean(this.s3 && this.config);
   }
 
+  /** "r2" khi đã cấu hình R2, "local" khi dùng kho local (dev), "none" khi không có gì */
+  get mode(): 'r2' | 'local' | 'none' {
+    if (this.isConfigured) return 'r2';
+    return this.local ? 'local' : 'none';
+  }
+
+  /** URL có thuộc kho lưu trữ của Auralis không (chặn gắn link ngoài vào bài viết) */
+  ownsUrl(url: string): boolean {
+    if (this.config && url.startsWith(`${this.config.publicUrl}/`)) return true;
+    return this.local?.ownsUrl(url) ?? false;
+  }
+
   /** Tạo Presigned PUT URL để Frontend tải ảnh bìa / MP3 thẳng lên R2. */
   async createPresignedUpload(
     request: PresignedUploadRequest,
   ): Promise<PresignedUpload> {
-    const { s3, config } = this.requireStorage();
     const extension = this.validate(
       request.kind,
       request.contentType,
       request.contentLength,
     );
     const key = this.buildKey(request.kind, extension);
+
+    if (!this.isConfigured && this.local) {
+      const expiresIn = LOCAL_PRESIGN_EXPIRES_IN;
+      return {
+        uploadUrl: this.local.createUploadUrl(
+          {
+            key,
+            contentType: request.contentType,
+            contentLength: request.contentLength,
+          },
+          expiresIn,
+        ),
+        method: 'PUT',
+        headers: { 'Content-Type': request.contentType },
+        key,
+        publicUrl: this.local.publicUrl(key),
+        expiresIn,
+      };
+    }
+    const { s3, config } = this.requireStorage();
 
     const command = new PutObjectCommand({
       Bucket: config.bucket,
@@ -101,10 +138,15 @@ export class StorageService {
 
   /** Upload buffer từ server (VD: file đã xử lý) lên R2 và trả về link CDN công khai. */
   async uploadBuffer(request: UploadBufferRequest): Promise<UploadedObject> {
-    const { s3, config } = this.requireStorage();
     const size = request.body.byteLength;
     const extension = this.validate(request.kind, request.contentType, size);
     const key = request.key ?? this.buildKey(request.kind, extension);
+
+    if (!this.isConfigured && this.local) {
+      await this.local.write(key, request.body);
+      return { key, publicUrl: this.local.publicUrl(key), size };
+    }
+    const { s3, config } = this.requireStorage();
 
     await s3.send(
       new PutObjectCommand({
@@ -121,11 +163,13 @@ export class StorageService {
   }
 
   async deleteObject(key: string): Promise<void> {
+    if (!this.isConfigured && this.local) return this.local.delete(key);
     const { s3, config } = this.requireStorage();
     await s3.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
   }
 
   getPublicUrl(key: string): string {
+    if (!this.isConfigured && this.local) return this.local.publicUrl(key);
     const { config } = this.requireStorage();
     const path = key.split('/').map(encodeURIComponent).join('/');
     return `${config.publicUrl}/${path}`;

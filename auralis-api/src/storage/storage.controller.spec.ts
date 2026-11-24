@@ -1,4 +1,8 @@
-import { INestApplication } from '@nestjs/common';
+import {
+  INestApplication,
+  UnauthorizedException,
+  type ExecutionContext,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { S3Client } from '@aws-sdk/client-s3';
 import request from 'supertest';
@@ -9,7 +13,20 @@ import {
   r2Endpoint,
   type StorageConfig,
 } from './storage.config.js';
+import { AuthGuard } from '../auth/auth.guard.js';
+import { LOCAL_MEDIA } from './local-media.store.js';
 import { StorageModule } from './storage.module.js';
+
+/** Guard giả: có header x-test-user thì coi như đã đăng nhập */
+const fakeAuthGuard = {
+  canActivate(context: ExecutionContext) {
+    const req = context
+      .switchToHttp()
+      .getRequest<{ headers: Record<string, string> }>();
+    if (!req.headers['x-test-user']) throw new UnauthorizedException();
+    return true;
+  },
+};
 
 const config: StorageConfig = {
   accountId: 'test-account',
@@ -22,8 +39,12 @@ const config: StorageConfig = {
 
 async function createApp(withStorage: boolean): Promise<INestApplication<App>> {
   const moduleRef = await Test.createTestingModule({ imports: [StorageModule] })
+    .overrideGuard(AuthGuard)
+    .useValue(fakeAuthGuard)
     .overrideProvider(STORAGE_CONFIG)
     .useValue(withStorage ? config : null)
+    .overrideProvider(LOCAL_MEDIA)
+    .useValue(null)
     .overrideProvider(S3_CLIENT)
     .useValue(
       withStorage
@@ -57,6 +78,7 @@ describe('StorageController', () => {
     it('POST /api/storage/presigned-upload trả về URL đã ký', async () => {
       const res = await request(app.getHttpServer())
         .post('/api/storage/presigned-upload')
+        .set('x-test-user', 'u1')
         .send({ kind: 'audio', contentType: 'audio/mpeg', contentLength: 1024 })
         .expect(201);
 
@@ -89,6 +111,7 @@ describe('StorageController', () => {
     ])('từ chối body %j với mã %i', async (body, status) => {
       await request(app.getHttpServer())
         .post('/api/storage/presigned-upload')
+        .set('x-test-user', 'u1')
         .send(body)
         .expect(status);
     });
@@ -98,8 +121,18 @@ describe('StorageController', () => {
     const app = await createApp(false);
     await request(app.getHttpServer())
       .post('/api/storage/presigned-upload')
+      .set('x-test-user', 'u1')
       .send({ kind: 'cover', contentType: 'image/png', contentLength: 1 })
       .expect(503);
+    await app.close();
+  });
+
+  it('trả về 401 khi chưa đăng nhập', async () => {
+    const app = await createApp(true);
+    await request(app.getHttpServer())
+      .post('/api/storage/presigned-upload')
+      .send({ kind: 'cover', contentType: 'image/png', contentLength: 1 })
+      .expect(401);
     await app.close();
   });
 });

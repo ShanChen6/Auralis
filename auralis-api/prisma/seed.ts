@@ -1,9 +1,11 @@
 import 'dotenv/config';
 import { readFileSync } from 'node:fs';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { hashPassword } from '../src/auth/password.js';
 import {
   AudioSource,
   AudioStatus,
+  LiveRoomStatus,
   MoodTag,
   PostStatus,
   PrismaClient,
@@ -68,17 +70,56 @@ async function main(): Promise<void> {
     });
   }
 
-  const author = await prisma.user.upsert({
-    where: { email: 'tacgia@auralis.local' },
-    update: {},
-    create: {
+  // Tài khoản mẫu cho môi trường phát triển (mật khẩu chỉ dùng local)
+  const accounts = [
+    {
+      email: 'admin@auralis.local',
+      username: 'admin',
+      displayName: 'Quản trị Auralis',
+      role: UserRole.ADMIN,
+      password: 'auralis-admin',
+    },
+    {
+      email: 'bientap@auralis.local',
+      username: 'bientap',
+      displayName: 'Biên tập viên',
+      role: UserRole.EDITOR,
+      password: 'auralis-editor',
+    },
+    {
       email: 'tacgia@auralis.local',
       username: 'auralis',
       displayName: 'Trạm Auralis',
       role: UserRole.AUTHOR,
-      bio: 'Tài khoản tác giả mẫu dùng cho môi trường phát triển.',
+      password: 'auralis-tacgia',
     },
-  });
+    {
+      email: 'giongdoc@auralis.local',
+      username: 'giongdoc',
+      displayName: 'Giọng Đọc Đêm',
+      role: UserRole.AUTHOR,
+      password: 'auralis-giongdoc',
+    },
+  ];
+  const users: Record<string, { id: string }> = {};
+  for (const { password, ...account } of accounts) {
+    const passwordHash = await hashPassword(password);
+    users[account.username] = await prisma.user.upsert({
+      where: { email: account.email },
+      update: {
+        role: account.role,
+        displayName: account.displayName,
+        passwordHash,
+      },
+      create: {
+        ...account,
+        passwordHash,
+        bio: 'Tài khoản mẫu cho môi trường phát triển.',
+      },
+      select: { id: true },
+    });
+  }
+  const author = users.auralis;
 
   const now = Date.now();
   for (const [index, post] of posts.entries()) {
@@ -120,9 +161,140 @@ async function main(): Promise<void> {
     });
   }
 
-  console.log(
-    `Seeded ${categories.length} categories, 1 author, ${posts.length} posts.`,
+  await seedCommunityPosts(author.id);
+  await seedLiveRooms(
+    author.id,
+    posts.map((p) => p.slug),
   );
+
+  console.log(
+    `Seeded ${categories.length} categories, ${accounts.length} accounts, ${posts.length} posts, 3 live rooms.`,
+  );
+}
+
+/** Một bài chỉ có chữ (chờ cộng đồng lồng tiếng) và một bài đang chờ duyệt */
+async function seedCommunityPosts(authorId: string): Promise<void> {
+  const textOnly =
+    'Sáng nay mình dậy sớm hơn thường lệ. Phố còn vắng, chỉ có tiếng chổi tre của cô lao công và mùi bánh mì nướng từ góc đường.\n\nMình chợt nhận ra, đã lâu lắm rồi mình không đi chậm như thế này. Không vội, không điện thoại, chỉ có mình và buổi sáng.\n\nNếu bạn có một giọng đọc ấm, hãy giúp mình kể lại buổi sáng này nhé.';
+  const pending =
+    'Có một quán nhỏ ở cuối hẻm, mở cửa từ năm giờ sáng. Bà chủ quán già lắm rồi, nhưng ly cà phê bà pha vẫn đậm như ngày nào.\n\nMỗi sáng, những người khách quen lại ngồi đó, chẳng ai nói với ai câu nào, mà vẫn thấy ấm lòng.';
+
+  const items = [
+    {
+      slug: 'buoi-sang-di-cham',
+      title: 'Buổi sáng đi chậm',
+      summary: 'Một buổi sáng không vội vàng, chờ một giọng đọc ấm kể lại.',
+      moodTag: MoodTag.CALM,
+      status: PostStatus.PUBLISHED,
+      content: textOnly,
+    },
+    {
+      slug: 'quan-ca-phe-cuoi-hem',
+      title: 'Quán cà phê cuối hẻm',
+      summary: 'Bài mẫu đang chờ biên tập viên duyệt.',
+      moodTag: MoodTag.NOSTALGIC,
+      status: PostStatus.PENDING,
+      content: pending,
+    },
+  ];
+  for (const { content, ...item } of items) {
+    const data = {
+      ...item,
+      audioSource: AudioSource.NONE,
+      audioStatus: AudioStatus.TEXT_ONLY,
+      publishedAt: item.status === PostStatus.PUBLISHED ? new Date() : null,
+      category: { connect: { slug: 'tan-van' } },
+    };
+    const postContent = { content, wordCount: content.split(/\s+/).length };
+    await prisma.post.upsert({
+      where: { slug: item.slug },
+      update: {},
+      create: {
+        ...data,
+        author: { connect: { id: authorId } },
+        content: { create: postContent },
+      },
+    });
+  }
+}
+
+/** Phòng nghe chung: 2 phòng đang phát 24/7 và 1 phòng sắp lên sóng */
+async function seedLiveRooms(hostId: string, slugs: string[]): Promise<void> {
+  const postIds = Object.fromEntries(
+    (
+      await prisma.post.findMany({
+        where: { slug: { in: slugs } },
+        select: { id: true, slug: true },
+      })
+    ).map((p) => [p.slug, p.id]),
+  );
+  const rooms = [
+    {
+      slug: 'tram-dem-mua-22h',
+      name: 'Trạm Đêm Mưa 22h',
+      description: 'Cùng nghe những câu chuyện đêm bên tiếng mưa rơi.',
+      status: LiveRoomStatus.LIVE,
+      playlist: [
+        'tram-dem-mua',
+        'mua-hoa-sua-cuoi-pho',
+        'gui-nguoi-da-tung-thuong',
+      ],
+    },
+    {
+      slug: 'goc-chua-lanh-cuoi-tuan',
+      name: 'Góc Chữa Lành Cuối Tuần',
+      description: 'Những lời nhắc nhỏ dịu dàng cho tâm hồn mệt mỏi.',
+      status: LiveRoomStatus.LIVE,
+      playlist: ['on-thoi-roi-se-on', 'chuyen-tau-som'],
+    },
+    {
+      slug: 'thu-gui-mua-thu',
+      name: 'Thư Gửi Mùa Thu',
+      description: 'Phòng đặc biệt, lên sóng tối thứ Bảy.',
+      status: LiveRoomStatus.SCHEDULED,
+      playlist: [],
+    },
+  ];
+  for (const room of rooms) {
+    const playlistTitle = `Phòng: ${room.name}`;
+    const existing = await prisma.playlist.findFirst({
+      where: { title: playlistTitle, ownerId: hostId },
+      select: { id: true },
+    });
+    const playlist =
+      existing ??
+      (await prisma.playlist.create({
+        data: { title: playlistTitle, ownerId: hostId, isPublic: false },
+        select: { id: true },
+      }));
+    await prisma.playlistItem.deleteMany({
+      where: { playlistId: playlist.id },
+    });
+    await prisma.playlistItem.createMany({
+      data: room.playlist
+        .filter((slug) => postIds[slug])
+        .map((slug, position) => ({
+          playlistId: playlist.id,
+          postId: postIds[slug],
+          position,
+        })),
+    });
+    const data = {
+      name: room.name,
+      description: room.description,
+      status: room.status,
+      scheduledAt:
+        room.status === LiveRoomStatus.SCHEDULED
+          ? new Date(Date.now() + 3 * 86_400_000)
+          : null,
+      playlist: { connect: { id: playlist.id } },
+    };
+    await prisma.liveRoom.upsert({
+      where: { slug: room.slug },
+      update: data,
+      create: { ...data, slug: room.slug, host: { connect: { id: hostId } } },
+    });
+  }
 }
 
 try {
