@@ -1,0 +1,333 @@
+// =============================================================================
+// Auralis – Trạm Thanh Âm & Cảm Xúc
+// Schema PostgreSQL thiết kế cho hàng trăm nghìn bài viết:
+//   - `posts` chỉ chứa metadata nhẹ (trang chủ, danh sách, carousel)
+//   - `post_contents` tách riêng văn bản dài + timestamps (chỉ đọc ở trang chi tiết)
+//   - Full-text search (tsvector + GIN) và trigram cho tiêu đề được tạo bằng SQL
+//     tùy chỉnh trong migration `init` (extension pg_trgm + unaccent, generated column).
+// =============================================================================
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// -----------------------------------------------------------------------------
+// Enums
+// -----------------------------------------------------------------------------
+
+enum UserRole {
+  LISTENER // Thính giả
+  AUTHOR // Tác giả / Cộng tác viên lồng tiếng
+  EDITOR // Biên tập viên (kiểm duyệt)
+  ADMIN
+}
+
+enum PostStatus {
+  DRAFT
+  PENDING // Chờ duyệt
+  PUBLISHED
+  REJECTED
+  ARCHIVED
+}
+
+/// Nguồn âm thanh của một số Radio
+enum AudioSource {
+  NONE // Bài chỉ có chữ (TEXT_ONLY) – chờ cộng đồng lồng tiếng
+  UPLOAD // Tác giả tự thu âm & tải lên
+  AI_EDGE // edge-tts
+  AI_VOICESTUDIO // VoiceStudio (nhân bản giọng Studio)
+}
+
+enum AudioStatus {
+  TEXT_ONLY
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum MoodTag {
+  CALM // Bình yên
+  HEALING // Chữa lành
+  NOSTALGIC // Hoài niệm
+  MELANCHOLY // Man mác buồn
+  ROMANTIC // Lãng mạn
+  HOPEFUL // Hy vọng
+  LONELY // Cô đơn
+  MOTIVATED // Tiếp thêm động lực
+}
+
+enum CommentStatus {
+  VISIBLE
+  HIDDEN
+}
+
+/// Trạng thái đăng ký lồng tiếng cho bài chỉ có chữ (TEXT_ONLY)
+enum NarrationStatus {
+  CLAIMED // Đã nhận lồng tiếng, đang thu âm
+  SUBMITTED // Đã nộp bản thu, chờ duyệt
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+enum LiveRoomStatus {
+  SCHEDULED
+  LIVE
+  ENDED
+}
+
+// -----------------------------------------------------------------------------
+// Users
+// -----------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  email        String   @unique @db.VarChar(255)
+  username     String   @unique @db.VarChar(50)
+  displayName  String   @map("display_name") @db.VarChar(100)
+  passwordHash String?  @map("password_hash")
+  avatarUrl    String?  @map("avatar_url")
+  bio          String?  @db.VarChar(500)
+  role         UserRole @default(LISTENER)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  posts         Post[]           @relation("PostAuthor")
+  narratedPosts Post[]           @relation("PostNarrator")
+  reviewedPosts Post[]           @relation("PostReviewer")
+  playlists     Playlist[]
+  comments      Comment[]
+  hostedRooms   LiveRoom[]
+  narrations    NarrationClaim[]
+
+  @@index([role])
+  @@map("users")
+}
+
+// -----------------------------------------------------------------------------
+// Categories
+// -----------------------------------------------------------------------------
+
+model Category {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  name        String   @db.VarChar(100)
+  slug        String   @unique @db.VarChar(120)
+  description String?  @db.VarChar(500)
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  posts Post[]
+
+  @@index([sortOrder])
+  @@map("categories")
+}
+
+// -----------------------------------------------------------------------------
+// Posts – metadata nhẹ, đọc nhiều
+// -----------------------------------------------------------------------------
+
+model Post {
+  id              String      @id @default(uuid(7)) @db.Uuid
+  title           String      @db.VarChar(200)
+  slug            String      @unique @db.VarChar(220)
+  summary         String?     @db.VarChar(500)
+  coverUrl        String?     @map("cover_url")
+  audioUrl        String?     @map("audio_url")
+  /// Thời lượng audio (giây)
+  duration        Int?
+  moodTag         MoodTag     @map("mood_tag")
+  status          PostStatus  @default(DRAFT)
+  audioSource     AudioSource @default(NONE) @map("audio_source")
+  audioStatus     AudioStatus @default(TEXT_ONLY) @map("audio_status")
+  /// Tên giọng đọc hiển thị (VD: "vi-VN-HoaiMyNeural", "Giọng Studio")
+  voiceName       String?     @map("voice_name") @db.VarChar(100)
+  /// Nhạc nền đã trộn (VD: "piano_rain")
+  backgroundMusic String?     @map("background_music") @db.VarChar(100)
+  isFeatured      Boolean     @default(false) @map("is_featured")
+  viewCount       Int         @default(0) @map("view_count")
+  listenCount     Int         @default(0) @map("listen_count")
+  rejectReason    String?     @map("reject_reason") @db.VarChar(500)
+  publishedAt     DateTime?   @map("published_at") @db.Timestamptz(3)
+  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  /// Cột tsvector sinh tự động từ title + summary (xem migration `init`)
+  searchVector Unsupported("tsvector")? @default(dbgenerated()) @map("search_vector")
+
+  authorId   String    @map("author_id") @db.Uuid
+  author     User      @relation("PostAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  narratorId String?   @map("narrator_id") @db.Uuid
+  narrator   User?     @relation("PostNarrator", fields: [narratorId], references: [id], onDelete: SetNull)
+  reviewerId String?   @map("reviewer_id") @db.Uuid
+  reviewer   User?     @relation("PostReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  categoryId String?   @map("category_id") @db.Uuid
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  content       PostContent?
+  comments      Comment[]
+  playlistItems PlaylistItem[]
+  liveRooms     LiveRoom[]
+  narrations    NarrationClaim[]
+
+  // Danh sách mới nhất / lọc theo tâm trạng / chuyên mục (luôn kèm status = PUBLISHED)
+  @@index([status, publishedAt(sort: Desc)])
+  @@index([status, moodTag, publishedAt(sort: Desc)])
+  @@index([status, categoryId, publishedAt(sort: Desc)])
+  // Bảng xếp hạng nghe nhiều / xem nhiều
+  @@index([status, listenCount(sort: Desc)])
+  @@index([status, viewCount(sort: Desc)])
+  // Trang tác giả, hàng chờ kiểm duyệt, bài cần lồng tiếng
+  @@index([authorId, createdAt(sort: Desc)])
+  @@index([narratorId])
+  @@index([reviewerId])
+  @@index([status, createdAt])
+  @@index([audioStatus, status])
+  // Full-text search
+  @@index([searchVector], type: Gin)
+  @@map("posts")
+}
+
+// -----------------------------------------------------------------------------
+// PostContents – văn bản dài + timestamps, quan hệ 1-1 với Post
+// -----------------------------------------------------------------------------
+
+model PostContent {
+  postId     String   @id @map("post_id") @db.Uuid
+  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  /// Nội dung tản văn (Markdown), các đoạn tách bằng dòng trống
+  content    String
+  /// Mảng mốc thời gian từng đoạn: [{ "index": 0, "start": 3.0, "end": 12.4 }, ...]
+  timestamps Json?    @db.JsonB
+  wordCount  Int      @default(0) @map("word_count")
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("post_contents")
+}
+
+// -----------------------------------------------------------------------------
+// Playlists
+// -----------------------------------------------------------------------------
+
+model Playlist {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  title       String   @db.VarChar(150)
+  description String?  @db.VarChar(500)
+  coverUrl    String?  @map("cover_url")
+  isPublic    Boolean  @default(true) @map("is_public")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  ownerId String @map("owner_id") @db.Uuid
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  items     PlaylistItem[]
+  liveRooms LiveRoom[]
+
+  @@index([ownerId, createdAt(sort: Desc)])
+  @@index([isPublic, createdAt(sort: Desc)])
+  @@map("playlists")
+}
+
+model PlaylistItem {
+  playlistId String   @map("playlist_id") @db.Uuid
+  playlist   Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  postId     String   @map("post_id") @db.Uuid
+  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  position   Int
+  addedAt    DateTime @default(now()) @map("added_at") @db.Timestamptz(3)
+
+  @@id([playlistId, postId])
+  @@index([playlistId, position])
+  @@index([postId])
+  @@map("playlist_items")
+}
+
+// -----------------------------------------------------------------------------
+// Comments (hỗ trợ trả lời 1 cấp qua parentId)
+// -----------------------------------------------------------------------------
+
+model Comment {
+  id        String        @id @default(uuid(7)) @db.Uuid
+  content   String        @db.VarChar(2000)
+  status    CommentStatus @default(VISIBLE)
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  postId   String    @map("post_id") @db.Uuid
+  post     Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId String    @map("author_id") @db.Uuid
+  author   User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parentId String?   @map("parent_id") @db.Uuid
+  parent   Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies  Comment[] @relation("CommentReplies")
+
+  @@index([postId, status, createdAt(sort: Desc)])
+  @@index([parentId, createdAt])
+  @@index([authorId])
+  @@map("comments")
+}
+
+// -----------------------------------------------------------------------------
+// LiveRooms – phòng nghe chung thời gian thực (Socket.io)
+// -----------------------------------------------------------------------------
+
+model LiveRoom {
+  id          String         @id @default(uuid(7)) @db.Uuid
+  name        String         @db.VarChar(150)
+  slug        String         @unique @db.VarChar(170)
+  description String?        @db.VarChar(500)
+  coverUrl    String?        @map("cover_url")
+  status      LiveRoomStatus @default(SCHEDULED)
+  scheduledAt DateTime?      @map("scheduled_at") @db.Timestamptz(3)
+  /// Thời điểm bắt đầu phát số Radio hiện tại – dùng tính currentTimestamp = now - startedAt
+  startedAt   DateTime?      @map("started_at") @db.Timestamptz(3)
+  endedAt     DateTime?      @map("ended_at") @db.Timestamptz(3)
+  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  hostId        String    @map("host_id") @db.Uuid
+  host          User      @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  currentPostId String?   @map("current_post_id") @db.Uuid
+  currentPost   Post?     @relation(fields: [currentPostId], references: [id], onDelete: SetNull)
+  /// Danh sách phát của phòng (phát lần lượt, lặp lại)
+  playlistId    String?   @map("playlist_id") @db.Uuid
+  playlist      Playlist? @relation(fields: [playlistId], references: [id], onDelete: SetNull)
+
+  @@index([status, scheduledAt])
+  @@index([hostId])
+  @@index([currentPostId])
+  @@index([playlistId])
+  @@map("live_rooms")
+}
+
+// -----------------------------------------------------------------------------
+// NarrationClaims – ghép cặp cộng đồng: thành viên nhận lồng tiếng bài TEXT_ONLY
+// -----------------------------------------------------------------------------
+
+model NarrationClaim {
+  id           String          @id @default(uuid(7)) @db.Uuid
+  status       NarrationStatus @default(CLAIMED)
+  audioUrl     String?         @map("audio_url")
+  /// Thời lượng bản thu (giây)
+  duration     Int?
+  note         String?         @db.VarChar(500)
+  rejectReason String?         @map("reject_reason") @db.VarChar(500)
+  createdAt    DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  postId     String @map("post_id") @db.Uuid
+  post       Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  narratorId String @map("narrator_id") @db.Uuid
+  narrator   User   @relation(fields: [narratorId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, narratorId])
+  @@index([status, updatedAt])
+  @@index([narratorId, createdAt(sort: Desc)])
+  @@map("narration_claims")
+}
